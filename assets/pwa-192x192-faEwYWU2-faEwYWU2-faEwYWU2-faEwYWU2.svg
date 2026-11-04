@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" rx="128" fill="#F9F9FB"/>
+  <rect x="32" y="32" width="448" height="448" rx="96" fill="#A3E635" stroke="#121214" stroke-width="24"/>
+  <!-- Brutalist Shadow Card -->
+  <rect x="96" y="96" width="320" height="320" rx="48" fill="#121214"/>
+  <rect x="84" y="84" width="320" height="320" rx="48" fill="#FFFFFF" stroke="#121214" stroke-width="20"/>
+  
+  <!-- D (diduitin) with Rp / Coin Icon inside -->
+  <text x="140" y="300" font-family="system-ui, sans-serif" font-weight="900" font-size="220" fill="#121214">d.</text>
+  
+  <!-- Star / Spark tag -->
+  <circle cx="340" cy="140" r="28" fill="#FACC15" stroke="#121214" stroke-width="12"/>
+</svg>
