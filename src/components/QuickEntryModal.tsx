@@ -80,28 +80,6 @@ export const QuickEntryModal: React.FC<QuickEntryModalProps> = ({
     }
   }, [isOpen, editTransaction, wallets, activeFilterWalletId]);
 
-  if (!isOpen) return null;
-
-  const handleNumpadClick = (val: string) => {
-    triggerHaptic('light');
-    if (val === 'C') {
-      setAmountStr('');
-      return;
-    }
-    if (val === 'DEL') {
-      setAmountStr(prev => (prev.length > 1 ? prev.slice(0, -1) : ''));
-      return;
-    }
-    if (val === '000') {
-      if (amountStr && amountStr !== '0' && amountStr.length <= 8) {
-        setAmountStr(prev => prev + '000');
-      }
-      return;
-    }
-    if (amountStr.length >= 10) return;
-    setAmountStr(prev => (!prev || prev === '0' ? val : prev + val));
-  };
-
   // Keyboard Support untuk Angka dan Backspace
   useEffect(() => {
     if (!isOpen) return;
@@ -127,6 +105,28 @@ export const QuickEntryModal: React.FC<QuickEntryModalProps> = ({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen]);
+
+  if (!isOpen) return null;
+
+  const handleNumpadClick = (val: string) => {
+    triggerHaptic('light');
+    if (val === 'C') {
+      setAmountStr('');
+      return;
+    }
+    if (val === 'DEL') {
+      setAmountStr(prev => (prev.length > 1 ? prev.slice(0, -1) : ''));
+      return;
+    }
+    if (val === '000') {
+      if (amountStr && amountStr !== '0' && amountStr.length <= 8) {
+        setAmountStr(prev => prev + '000');
+      }
+      return;
+    }
+    if (amountStr.length >= 10) return;
+    setAmountStr(prev => (!prev || prev === '0' ? val : prev + val));
+  };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
