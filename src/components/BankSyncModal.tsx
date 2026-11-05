@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import type { Wallet } from '../types';
+import { db } from '../db';
 import {
   SUPPORTED_FINANCIAL_PROVIDERS,
   type BankSyncRule
@@ -13,7 +14,9 @@ import {
   Wallet as WalletIcon,
   CheckCircle2,
   ArrowUpRight,
-  Sparkles
+  Sparkles,
+  Link,
+  Unlink
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { triggerHaptic } from '../utils/haptics';
@@ -27,16 +30,18 @@ interface BankSyncModalProps {
 
 export const BankSyncModal: React.FC<BankSyncModalProps> = ({
   isOpen,
-  onClose
+  onClose,
+  wallets,
+  onRefresh
 }) => {
   const [activeTab, setActiveTab] = useState<'providers' | 'schema'>('providers');
   const [filterType, setFilterType] = useState<'all' | 'bank' | 'ewallet'>('all');
   const [pairedProviders, setPairedProviders] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem('diduitin_paired_providers');
-      return saved ? JSON.parse(saved) : ['bca', 'gopay', 'ovo', 'dana'];
+      return saved ? JSON.parse(saved) : [];
     } catch {
-      return ['bca', 'gopay', 'ovo', 'dana'];
+      return [];
     }
   });
 
@@ -46,26 +51,64 @@ export const BankSyncModal: React.FC<BankSyncModalProps> = ({
 
   if (!isOpen) return null;
 
-  const togglePairing = (providerId: string) => {
-    triggerHaptic('medium');
-    setPairedProviders(prev => {
-      const isPaired = prev.includes(providerId);
-      if (!isPaired) {
-        confetti({ particleCount: 35, spread: 60, origin: { y: 0.6 } });
-        return [...prev, providerId];
-      } else {
-        return prev.filter(id => id !== providerId);
-      }
-    });
+  // Cek apakah provider sudah terhubung ke database dompet
+  const isProviderPaired = (provider: BankSyncRule) => {
+    return (
+      pairedProviders.includes(provider.id) ||
+      wallets.some(w =>
+        w.name.toLowerCase().includes(provider.shortName.toLowerCase()) ||
+        w.id.toLowerCase().includes(provider.id.toLowerCase())
+      )
+    );
   };
 
-  const handleOpenAndPair = (provider: BankSyncRule) => {
+  // Alur 1: Klik Hubungkan -> Masuk ke kategori Dompet
+  const handleConnectProvider = async (provider: BankSyncRule) => {
     triggerHaptic('success');
-    // 1. Otomatis hubungkan jika belum terhubung
-    if (!pairedProviders.includes(provider.id)) {
-      setPairedProviders(prev => [...prev, provider.id]);
+
+    // Cek apakah dompet dengan nama ini sudah ada di Dexie
+    const existingWallet = wallets.find(w =>
+      w.name.toLowerCase().includes(provider.shortName.toLowerCase()) ||
+      w.id === `wallet-${provider.id}`
+    );
+
+    if (!existingWallet) {
+      await db.wallets.add({
+        id: `wallet-${provider.id}`,
+        name: provider.shortName,
+        type: provider.type === 'bank' ? 'bank' : 'ewallet',
+        balance: 0,
+        color: provider.color,
+        createdAt: Date.now()
+      });
     }
-    // 2. Langsung trigger intent buka aplikasi di HP
+
+    setPairedProviders(prev => (prev.includes(provider.id) ? prev : [...prev, provider.id]));
+    confetti({ particleCount: 40, spread: 70, origin: { y: 0.6 } });
+    onRefresh();
+  };
+
+  // Alur 2: Klik Putuskan -> Hapus/lepaskan dari kategori Dompet
+  const handleDisconnectProvider = async (provider: BankSyncRule) => {
+    triggerHaptic('warning');
+
+    // Hapus dompet yang terkait jika dibuat otomatis
+    const targetWallet = wallets.find(w =>
+      w.id === `wallet-${provider.id}` ||
+      w.name.toLowerCase() === provider.shortName.toLowerCase()
+    );
+
+    if (targetWallet) {
+      await db.wallets.delete(targetWallet.id);
+    }
+
+    setPairedProviders(prev => prev.filter(id => id !== provider.id));
+    onRefresh();
+  };
+
+  // Alur 3: Klik Buka Aplikasi (Hanya bisa setelah dihubungkan)
+  const handleOpenApp = (provider: BankSyncRule) => {
+    triggerHaptic('light');
     openFinancialApp(provider);
   };
 
@@ -89,7 +132,7 @@ export const BankSyncModal: React.FC<BankSyncModalProps> = ({
                 <span>Auto-Sync Bank & E-Wallet</span>
               </h2>
               <span className="text-[10px] text-neutral-500 font-bold block">
-                {pairedProviders.length} akun terpasang & terhubung
+                Pilih akun bank & e-wallet untuk dijadikan dompet
               </span>
             </div>
           </div>
@@ -133,7 +176,7 @@ export const BankSyncModal: React.FC<BankSyncModalProps> = ({
                 <span>Privasi 100% Aman & Lokal</span>
               </span>
               <p className="text-[11px] text-neutral-800 font-bold leading-relaxed">
-                diduitin tidak meminta PIN atau password bank. Integrasi bekerja via pembukaan aplikasi langsung dan pembacaan notifikasi mutasi lokal di HP Anda.
+                Klik <strong>"Hubungkan"</strong> untuk menambahkan bank/e-wallet ini sebagai dompet Anda. Setelah terhubung, Anda dapat meluncurkan aplikasinya langsung.
               </p>
             </div>
 
@@ -173,13 +216,13 @@ export const BankSyncModal: React.FC<BankSyncModalProps> = ({
             {/* Grid Kartu Bank & E-Wallet */}
             <div className="grid grid-cols-2 gap-2">
               {filteredProviders.map(p => {
-                const isPaired = pairedProviders.includes(p.id);
+                const isPaired = isProviderPaired(p);
 
                 return (
                   <div
                     key={p.id}
                     className={`p-2.5 border-2 border-[#121214] rounded-xl flex flex-col justify-between shadow-[2px_2px_0px_#121214] transition-all ${
-                      isPaired ? 'bg-[#F0FDF4]' : 'bg-white'
+                      isPaired ? 'bg-[#F0FDF4] border-emerald-950' : 'bg-white'
                     }`}
                   >
                     <div>
@@ -195,36 +238,46 @@ export const BankSyncModal: React.FC<BankSyncModalProps> = ({
                         {isPaired && (
                           <span className="inline-flex items-center gap-0.5 text-[9px] font-black text-emerald-800 bg-emerald-100 px-1 rounded">
                             <CheckCircle2 className="w-2.5 h-2.5 text-emerald-700" />
-                            <span>Terhubung</span>
+                            <span>Dompet Aktif</span>
                           </span>
                         )}
                       </div>
                     </div>
 
                     <div className="space-y-1.5 pt-1.5 border-t border-neutral-200">
-                      {/* Tombol Buka Aplikasi Langsung */}
-                      <button
-                        type="button"
-                        onClick={() => handleOpenAndPair(p)}
-                        className="brutal-btn w-full py-1.5 bg-[#A3E635] text-[#121214] text-[10px] font-black uppercase tracking-wide gap-1 cursor-pointer shadow-[1.5px_1.5px_0px_#121214] active:translate-x-0.5 active:translate-y-0.5"
-                        title={`Buka ${p.shortName} di HP`}
-                      >
-                        <span>Buka Aplikasi</span>
-                        <ArrowUpRight className="w-3 h-3 stroke-[2.5]" />
-                      </button>
+                      {/* ALUR: Jika BELUM terhubung -> Tampilkan tombol "+ Hubungkan" */}
+                      {!isPaired ? (
+                        <button
+                          type="button"
+                          onClick={() => handleConnectProvider(p)}
+                          className="brutal-btn w-full py-1.5 bg-[#DDD6FE] hover:bg-[#c4b5fd] text-[#121214] text-[10px] font-black uppercase tracking-wide gap-1 cursor-pointer shadow-[1.5px_1.5px_0px_#121214] active:translate-x-0.5 active:translate-y-0.5"
+                        >
+                          <Link className="w-3 h-3 stroke-[2.5]" />
+                          <span>Hubungkan</span>
+                        </button>
+                      ) : (
+                        /* ALUR: Jika SUDAH terhubung -> Muncul tombol "Buka Aplikasi" & opsi "Putuskan" */
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenApp(p)}
+                            className="brutal-btn w-full py-1.5 bg-[#A3E635] text-[#121214] text-[10px] font-black uppercase tracking-wide gap-1 cursor-pointer shadow-[1.5px_1.5px_0px_#121214] active:translate-x-0.5 active:translate-y-0.5"
+                            title={`Buka ${p.shortName} di HP`}
+                          >
+                            <span>Buka Aplikasi</span>
+                            <ArrowUpRight className="w-3 h-3 stroke-[2.5]" />
+                          </button>
 
-                      {/* Tombol Toggle Hubungkan / Putuskan */}
-                      <button
-                        type="button"
-                        onClick={() => togglePairing(p.id)}
-                        className={`w-full py-1 rounded text-[9px] font-bold uppercase transition-all cursor-pointer ${
-                          isPaired
-                            ? 'text-neutral-500 hover:text-rose-600 hover:underline'
-                            : 'bg-neutral-100 text-[#121214] border border-[#121214] hover:bg-[#FEF08A]'
-                        }`}
-                      >
-                        {isPaired ? 'Putuskan' : '+ Hubungkan'}
-                      </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDisconnectProvider(p)}
+                            className="w-full py-1 rounded text-[9px] font-bold uppercase text-neutral-400 hover:text-rose-600 hover:underline cursor-pointer transition-colors flex items-center justify-center gap-1"
+                          >
+                            <Unlink className="w-2.5 h-2.5" />
+                            <span>Putuskan Dompet</span>
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
                 );
@@ -239,25 +292,22 @@ export const BankSyncModal: React.FC<BankSyncModalProps> = ({
             <div className="p-3 bg-[#DDD6FE] border-2 border-[#121214] rounded-xl text-[#121214] shadow-[2px_2px_0px_#121214]">
               <span className="font-black text-xs uppercase flex items-center gap-1.5 mb-1">
                 <Sparkles className="w-4 h-4 text-purple-800" />
-                <span>Alur Integrasi & Buka Aplikasi Otomatis</span>
+                <span>Alur Hubungkan, Buka, & Kategori Dompet</span>
               </span>
               <p className="text-[11px] leading-relaxed">
-                Di Android, tombol "Buka Aplikasi" mengirimkan *App Intent* resmi ke sistem OS untuk langsung memindahkan layar ke aplikasi BCA, Livin, GoPay, OVO, atau DANA yang terpasang di HP Anda.
+                Setiap kali Anda menekan <strong>"Hubungkan"</strong>, akun bank atau e-wallet tersebut otomatis dibuatkan kantong di kategori <strong>Dompet</strong> Anda.
               </p>
             </div>
 
             <ol className="space-y-2 list-decimal list-inside pl-1 text-[11px]">
               <li>
-                <strong>Buka Aplikasi Instan:</strong> Klik "Buka Aplikasi", HP otomatis meluncurkan aplikasi bank/e-wallet Anda.
+                <strong>Langkah 1 (Hubungkan):</strong> Tekan "Hubungkan", bank/e-wallet otomatis terdaftar ke dalam list Dompet di beranda.
               </li>
               <li>
-                <strong>Status Terhubung:</strong> Akun berstatus "Terhubung" otomatis menyinkronkan setiap mutasi yang Anda lakukan di aplikasi tersebut.
+                <strong>Langkah 2 (Buka Aplikasi):</strong> Setelah terhubung, tombol "Buka Aplikasi" akan aktif dan dapat meluncurkan aplikasi m-Banking/e-Wallet di HP Anda.
               </li>
               <li>
-                <strong>Deteksi Notifikasi Lokal:</strong> Listener notifikasi di Android membaca nominal dan nama merchant secara otomatis saat transaksi selesai.
-              </li>
-              <li>
-                <strong>Privasi 100% Aman:</strong> Tidak ada permintaan PIN / password / login perbankan di diduitin.
+                <strong>Langkah 3 (Putuskan):</strong> Jika tidak lagi digunakan, tekan "Putuskan Dompet" untuk menghapusnya dari daftar dompet beranda Anda.
               </li>
             </ol>
           </div>
