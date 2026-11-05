@@ -397,6 +397,10 @@ export function App() {
             onClose={() => setIsBankSyncOpen(false)}
             wallets={wallets}
             onRefresh={loadData}
+            onNavigateToWallets={() => {
+              setIsBankSyncOpen(false);
+              setIsWalletsOpen(true);
+            }}
           />
         )}
 

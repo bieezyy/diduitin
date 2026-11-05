@@ -26,13 +26,15 @@ interface BankSyncModalProps {
   onClose: () => void;
   wallets: Wallet[];
   onRefresh: () => void;
+  onNavigateToWallets?: () => void;
 }
 
 export const BankSyncModal: React.FC<BankSyncModalProps> = ({
   isOpen,
   onClose,
   wallets,
-  onRefresh
+  onRefresh,
+  onNavigateToWallets
 }) => {
   const [activeTab, setActiveTab] = useState<'providers' | 'schema'>('providers');
   const [filterType, setFilterType] = useState<'all' | 'bank' | 'ewallet'>('all');
@@ -106,10 +108,21 @@ export const BankSyncModal: React.FC<BankSyncModalProps> = ({
     onRefresh();
   };
 
-  // Alur 3: Klik Buka Aplikasi (Hanya bisa setelah dihubungkan)
+  // Alur 3: Klik Buka Aplikasi -> Arahkan user menuju menu Kelola Dompet & Rekening
   const handleOpenApp = (provider: BankSyncRule) => {
-    triggerHaptic('light');
-    openFinancialApp(provider);
+    triggerHaptic('medium');
+    // Opsional: jalankan juga openFinancialApp untuk mencoba meluncurkan apps jika di HP
+    try {
+      openFinancialApp(provider);
+    } catch {
+      // ignore
+    }
+
+    // Arahkan langsung ke menu Kelola Dompet & Rekening
+    onClose();
+    if (onNavigateToWallets) {
+      onNavigateToWallets();
+    }
   };
 
   const filteredProviders = SUPPORTED_FINANCIAL_PROVIDERS.filter(p => {
