@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../db';
-import { X, Check, Coins, HelpCircle, Coffee, CheckCheck, ArrowUpRight } from 'lucide-react';
+import { X, Check, Coins, HelpCircle, MessageSquarePlus, Send } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import { triggerHaptic } from '../utils/haptics';
 import { ActionModal, type AlertModalState } from './ActionModal';
 
 interface SettingsModalProps {
@@ -23,7 +24,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 }) => {
   const [budgetInput, setBudgetInput] = useState(currentBudget ? currentBudget.toString() : '0');
   const [savedSuccess, setSavedSuccess] = useState(false);
-  const [copiedEwallet, setCopiedEwallet] = useState<string | null>(null);
+  const [feedbackText, setFeedbackText] = useState('');
+  const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
 
   // State ActionModal Reusable
   const [actionModal, setActionModal] = useState<AlertModalState>({
@@ -40,31 +42,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   if (!isOpen) return null;
 
-  const numericVal = parseInt(budgetInput.replace(/\D/g, ''), 10) || 0;
-
   const handleBudgetChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const rawVal = e.target.value.replace(/\D/g, '');
-    setBudgetInput(rawVal);
+    const raw = e.target.value.replace(/\D/g, '');
+    setBudgetInput(raw);
   };
 
-  const handleQuickAdd = (addAmount: number) => {
-    setBudgetInput((numericVal + addAmount).toString());
+  const numericVal = parseInt(budgetInput, 10) || 0;
+
+  const handleQuickAdd = (amount: number) => {
+    triggerHaptic('light');
+    const current = parseInt(budgetInput, 10) || 0;
+    setBudgetInput((current + amount).toString());
   };
 
   const handleSaveBudget = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (numericVal < 0) {
-      setActionModal({
-        isOpen: true,
-        type: 'warning',
-        title: 'Nominal Tidak Valid',
-        message: 'Masukkan limit budget yang valid.',
-        confirmText: 'Mengerti',
-        onConfirm: () => setActionModal(prev => ({ ...prev, isOpen: false }))
-      });
-      return;
-    }
-
+    triggerHaptic('success');
     const now = new Date();
     const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     const budgetId = `b-${currentMonth}`;
@@ -80,36 +73,46 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     onRefresh();
   };
 
-  const handleCopyPayment = (providerName: string) => {
-    const rawNumber = '089514026211';
+  // Kirim masukan & saran pengguna ke email tanpa mengekspos alamat email di teks UI
+  const handleSubmitFeedback = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!feedbackText.trim()) {
+      triggerHaptic('warning');
+      setActionModal({
+        isOpen: true,
+        type: 'warning',
+        title: 'Masukan Masih Kosong',
+        message: 'Ketik masukan atau saran Anda terlebih dahulu sebelum mengirim.',
+        confirmText: 'Mengerti',
+        onConfirm: () => setActionModal(prev => ({ ...prev, isOpen: false }))
+      });
+      return;
+    }
 
-    // 1. Salin nomor ke clipboard
-    try {
-      if (navigator?.clipboard?.writeText) {
-        navigator.clipboard.writeText(rawNumber);
+    triggerHaptic('success');
+    setIsSubmittingFeedback(true);
+
+    const recipient = 'al' + 'di' + 'ro' + 'bi' + 'is' + '@' + 'gm' + 'ail' + '.' + 'com';
+    const subject = encodeURIComponent('Masukan & Saran Pengguna diduitin');
+    const body = encodeURIComponent(feedbackText.trim() + '\n\n---\nDikirim dari Aplikasi diduitin');
+
+    confetti({ particleCount: 40, spread: 60, origin: { y: 0.7 } });
+
+    // Buka aplikasi email di perangkat user dengan draft yang sudah terisi
+    window.location.href = `mailto:${recipient}?subject=${subject}&body=${body}`;
+
+    setActionModal({
+      isOpen: true,
+      type: 'success',
+      title: 'Terima Kasih Banyak!',
+      message: 'Saran Anda sangat berharga untuk pengembangan diduitin berikutnya.',
+      confirmText: 'Selesai',
+      onConfirm: () => {
+        setActionModal(prev => ({ ...prev, isOpen: false }));
+        setFeedbackText('');
+        setIsSubmittingFeedback(false);
       }
-    } catch {
-      // ignore
-    }
-
-    setCopiedEwallet(providerName);
-    confetti({ particleCount: 30, spread: 50, origin: { y: 0.7 } });
-    setTimeout(() => setCopiedEwallet(null), 3500);
-
-    // 2. Direct Deep Linking langsung ke aplikasi e-wallet di HP agar user bisa langsung kirim dana
-    if (providerName === 'DANA') {
-      window.location.href = `https://link.dana.id/sendmoney?phoneNumber=${rawNumber}`;
-    } else if (providerName === 'GoPay') {
-      window.location.href = `gojek://gopay/transfer?phone=${rawNumber}`;
-      setTimeout(() => {
-        window.open('https://gopay.co.id', '_blank');
-      }, 600);
-    } else if (providerName === 'OVO') {
-      window.location.href = 'ovo://';
-      setTimeout(() => {
-        window.open('https://www.ovo.id', '_blank');
-      }, 600);
-    }
+    });
   };
 
   return (
@@ -125,8 +128,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </>
             ) : (
               <>
-                <Coffee className="w-4 h-4 text-amber-500" />
-                Pengaturan & Dukungan
+                <MessageSquarePlus className="w-4 h-4 text-[#121214]" />
+                Pengaturan & Masukan
               </>
             )}
           </h2>
@@ -205,7 +208,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </form>
         )}
 
-        {/* Mode 'settings': Hanya tampilkan Panduan Singkat & Traktir buat Parkir */}
+        {/* Mode 'settings': Panduan Singkat & Punya Masukan dan Saran */}
         {mode === 'settings' && (
           <div className="space-y-4">
             {/* Info Pengenalan Apps */}
@@ -229,71 +232,38 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </button>
             </div>
 
-            {/* Traktir buat Parkir (OVO, DANA, GoPay) */}
-            <div className="p-4 border-2 border-[#121214] rounded-xl bg-gradient-to-br from-[#FEF08A] to-[#FDE047] space-y-3 shadow-[3px_3px_0px_#121214]">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-lg bg-white border-2 border-[#121214] flex items-center justify-center shadow-[1px_1px_0px_#121214]">
-                    <Coffee className="w-4 h-4 text-[#121214]" />
-                  </div>
-                  <div>
-                    <h3 className="text-xs font-black uppercase text-[#121214]">Traktir buat Parkir</h3>
-                    <span className="text-[10px] font-bold text-neutral-700 block">Dukungan uang receh parkir buat solo dev</span>
-                  </div>
+            {/* Punya Masukan dan Saran? */}
+            <form onSubmit={handleSubmitFeedback} className="p-4 border-2 border-[#121214] rounded-xl bg-gradient-to-br from-[#FEF08A] to-[#FDE047] space-y-3 shadow-[3px_3px_0px_#121214]">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-white border-2 border-[#121214] flex items-center justify-center shadow-[1px_1px_0px_#121214]">
+                  <MessageSquarePlus className="w-4 h-4 text-[#121214]" />
+                </div>
+                <div>
+                  <h3 className="text-xs font-black uppercase text-[#121214]">Punya Masukan dan Saran?</h3>
+                  <span className="text-[10px] font-bold text-neutral-700 block">Sampaikan fitur atau hal yang ingin Anda tingkatkan</span>
                 </div>
               </div>
 
-              <p className="text-[11px] text-neutral-800 font-bold leading-relaxed bg-white/70 p-2.5 rounded-lg border border-[#121214]">
-                Suka pakai diduitin? Klik salah satu e-wallet di bawah untuk langsung membuka transfer di aplikasi OVO, DANA, atau GoPay Anda:
-              </p>
+              {/* Box Type Input (Textarea) */}
+              <textarea
+                rows={4}
+                value={feedbackText}
+                onChange={e => setFeedbackText(e.target.value)}
+                placeholder="Tulis masukan, kritik, atau ide fitur yang Anda inginkan di sini..."
+                className="brutal-input w-full text-xs font-bold bg-white"
+                maxLength={400}
+              />
 
-              <div className="grid grid-cols-3 gap-2 pt-1">
-                {/* OVO */}
-                <button
-                  type="button"
-                  onClick={() => handleCopyPayment('OVO')}
-                  className="brutal-btn py-2 px-1 text-xs uppercase bg-[#EDE9FE] hover:bg-[#DDD6FE] text-[#4C1D95] font-black flex flex-col items-center gap-0.5 cursor-pointer shadow-[2px_2px_0px_#121214] active:translate-x-0.5 active:translate-y-0.5"
-                >
-                  <span>OVO</span>
-                  <span className="text-[9px] font-bold flex items-center gap-0.5">
-                    {copiedEwallet === 'OVO' ? <CheckCheck className="w-3 h-3 text-emerald-700" /> : <ArrowUpRight className="w-2.5 h-2.5" />}
-                    {copiedEwallet === 'OVO' ? 'Dialihkan' : 'Kirim'}
-                  </span>
-                </button>
-
-                {/* DANA */}
-                <button
-                  type="button"
-                  onClick={() => handleCopyPayment('DANA')}
-                  className="brutal-btn py-2 px-1 text-xs uppercase bg-[#E0F2FE] hover:bg-[#BAE6FD] text-[#0369A1] font-black flex flex-col items-center gap-0.5 cursor-pointer shadow-[2px_2px_0px_#121214] active:translate-x-0.5 active:translate-y-0.5"
-                >
-                  <span>DANA</span>
-                  <span className="text-[9px] font-bold flex items-center gap-0.5">
-                    {copiedEwallet === 'DANA' ? <CheckCheck className="w-3 h-3 text-emerald-700" /> : <ArrowUpRight className="w-2.5 h-2.5" />}
-                    {copiedEwallet === 'DANA' ? 'Dialihkan' : 'Kirim'}
-                  </span>
-                </button>
-
-                {/* GoPay */}
-                <button
-                  type="button"
-                  onClick={() => handleCopyPayment('GoPay')}
-                  className="brutal-btn py-2 px-1 text-xs uppercase bg-[#DCFCE7] hover:bg-[#BBF7D0] text-[#15803D] font-black flex flex-col items-center gap-0.5 cursor-pointer shadow-[2px_2px_0px_#121214] active:translate-x-0.5 active:translate-y-0.5"
-                >
-                  <span>GoPay</span>
-                  <span className="text-[9px] font-bold flex items-center gap-0.5">
-                    {copiedEwallet === 'GoPay' ? <CheckCheck className="w-3 h-3 text-emerald-700" /> : <ArrowUpRight className="w-2.5 h-2.5" />}
-                    {copiedEwallet === 'GoPay' ? 'Dialihkan' : 'Kirim'}
-                  </span>
-                </button>
-              </div>
-
-              {copiedEwallet && (
-                <div className="text-[10px] font-black text-center text-emerald-800 bg-white p-1 rounded border border-[#121214]">
-                  Aplikasi {copiedEwallet} dibuka untuk proses kirim dana ✓
-                </div>
-              )}
-            </div>
+              {/* Tombol Submit */}
+              <button
+                type="submit"
+                disabled={isSubmittingFeedback || !feedbackText.trim()}
+                className="brutal-btn w-full py-2.5 bg-[#A3E635] text-[#121214] text-xs font-black uppercase tracking-wide gap-1.5 cursor-pointer shadow-[2px_2px_0px_#121214] active:translate-x-0.5 active:translate-y-0.5 disabled:opacity-50"
+              >
+                <Send className="w-3.5 h-3.5 stroke-[2.5]" />
+                <span>Submit Masukan</span>
+              </button>
+            </form>
           </div>
         )}
 
