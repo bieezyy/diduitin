@@ -1,16 +1,22 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { Wallet } from '../types';
 import {
-  SUPPORTED_FINANCIAL_PROVIDERS
+  SUPPORTED_FINANCIAL_PROVIDERS,
+  type BankSyncRule
 } from '../services/bankSyncService';
+import { openFinancialApp } from '../services/bankSyncBridge';
 import {
   X,
-  ExternalLink,
   Zap,
   ShieldCheck,
   Building2,
-  Wallet as WalletIcon
+  Wallet as WalletIcon,
+  CheckCircle2,
+  ArrowUpRight,
+  Sparkles
 } from 'lucide-react';
+import confetti from 'canvas-confetti';
+import { triggerHaptic } from '../utils/haptics';
 
 interface BankSyncModalProps {
   isOpen: boolean;
@@ -25,8 +31,43 @@ export const BankSyncModal: React.FC<BankSyncModalProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'providers' | 'schema'>('providers');
   const [filterType, setFilterType] = useState<'all' | 'bank' | 'ewallet'>('all');
+  const [pairedProviders, setPairedProviders] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('diduitin_paired_providers');
+      return saved ? JSON.parse(saved) : ['bca', 'gopay', 'ovo', 'dana'];
+    } catch {
+      return ['bca', 'gopay', 'ovo', 'dana'];
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem('diduitin_paired_providers', JSON.stringify(pairedProviders));
+  }, [pairedProviders]);
 
   if (!isOpen) return null;
+
+  const togglePairing = (providerId: string) => {
+    triggerHaptic('medium');
+    setPairedProviders(prev => {
+      const isPaired = prev.includes(providerId);
+      if (!isPaired) {
+        confetti({ particleCount: 35, spread: 60, origin: { y: 0.6 } });
+        return [...prev, providerId];
+      } else {
+        return prev.filter(id => id !== providerId);
+      }
+    });
+  };
+
+  const handleOpenAndPair = (provider: BankSyncRule) => {
+    triggerHaptic('success');
+    // 1. Otomatis hubungkan jika belum terhubung
+    if (!pairedProviders.includes(provider.id)) {
+      setPairedProviders(prev => [...prev, provider.id]);
+    }
+    // 2. Langsung trigger intent buka aplikasi di HP
+    openFinancialApp(provider);
+  };
 
   const filteredProviders = SUPPORTED_FINANCIAL_PROVIDERS.filter(p => {
     if (filterType === 'all') return true;
@@ -40,7 +81,7 @@ export const BankSyncModal: React.FC<BankSyncModalProps> = ({
         {/* Header Modal */}
         <div className="flex items-center justify-between pb-3 border-b-2 border-[#121214] mb-3">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-[#A3E635] border-2 border-[#121214] flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-[#A3E635] border-2 border-[#121214] flex items-center justify-center shadow-[1.5px_1.5px_0px_#121214]">
               <Zap className="w-4 h-4 text-[#121214] stroke-[2.5]" />
             </div>
             <div>
@@ -48,7 +89,7 @@ export const BankSyncModal: React.FC<BankSyncModalProps> = ({
                 <span>Auto-Sync Bank & E-Wallet</span>
               </h2>
               <span className="text-[10px] text-neutral-500 font-bold block">
-                Integrasi m-Banking & Dompet Digital Indonesia
+                {pairedProviders.length} akun terpasang & terhubung
               </span>
             </div>
           </div>
@@ -92,12 +133,12 @@ export const BankSyncModal: React.FC<BankSyncModalProps> = ({
                 <span>Privasi 100% Aman & Lokal</span>
               </span>
               <p className="text-[11px] text-neutral-800 font-bold leading-relaxed">
-                diduitin tidak meminta PIN atau password bank. Integrasi bekerja via deteksi notifikasi mutasi lokal di HP Anda.
+                diduitin tidak meminta PIN atau password bank. Integrasi bekerja via pembukaan aplikasi langsung dan pembacaan notifikasi mutasi lokal di HP Anda.
               </p>
             </div>
 
             {/* Filter Pill: Semua, Bank, E-Wallet */}
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
               <button
                 type="button"
                 onClick={() => setFilterType('all')}
@@ -131,33 +172,63 @@ export const BankSyncModal: React.FC<BankSyncModalProps> = ({
 
             {/* Grid Kartu Bank & E-Wallet */}
             <div className="grid grid-cols-2 gap-2">
-              {filteredProviders.map(p => (
-                <div
-                  key={p.id}
-                  className="p-2.5 border-2 border-[#121214] rounded-xl bg-white shadow-[2px_2px_0px_#121214] flex flex-col justify-between"
-                >
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-black text-[#121214] truncate pr-1">{p.shortName}</span>
-                      <span className="w-2.5 h-2.5 rounded-full border border-[#121214] shrink-0" style={{ backgroundColor: p.color }} />
+              {filteredProviders.map(p => {
+                const isPaired = pairedProviders.includes(p.id);
+
+                return (
+                  <div
+                    key={p.id}
+                    className={`p-2.5 border-2 border-[#121214] rounded-xl flex flex-col justify-between shadow-[2px_2px_0px_#121214] transition-all ${
+                      isPaired ? 'bg-[#F0FDF4]' : 'bg-white'
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-black text-[#121214] truncate pr-1">{p.shortName}</span>
+                        <span className="w-2.5 h-2.5 rounded-full border border-[#121214] shrink-0" style={{ backgroundColor: p.color }} />
+                      </div>
+                      
+                      <div className="flex items-center gap-1 mb-2">
+                        <span className="text-[9px] font-bold text-neutral-500 uppercase">
+                          {p.type === 'bank' ? 'm-Banking' : 'Dompet Digital'}
+                        </span>
+                        {isPaired && (
+                          <span className="inline-flex items-center gap-0.5 text-[9px] font-black text-emerald-800 bg-emerald-100 px-1 rounded">
+                            <CheckCircle2 className="w-2.5 h-2.5 text-emerald-700" />
+                            <span>Terhubung</span>
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <span className="text-[9px] font-bold text-neutral-500 uppercase block mb-2">
-                      {p.type === 'bank' ? 'Bank / m-Banking' : 'Dompet Digital'}
-                    </span>
+
+                    <div className="space-y-1.5 pt-1.5 border-t border-neutral-200">
+                      {/* Tombol Buka Aplikasi Langsung */}
+                      <button
+                        type="button"
+                        onClick={() => handleOpenAndPair(p)}
+                        className="brutal-btn w-full py-1.5 bg-[#A3E635] text-[#121214] text-[10px] font-black uppercase tracking-wide gap-1 cursor-pointer shadow-[1.5px_1.5px_0px_#121214] active:translate-x-0.5 active:translate-y-0.5"
+                        title={`Buka ${p.shortName} di HP`}
+                      >
+                        <span>Buka Aplikasi</span>
+                        <ArrowUpRight className="w-3 h-3 stroke-[2.5]" />
+                      </button>
+
+                      {/* Tombol Toggle Hubungkan / Putuskan */}
+                      <button
+                        type="button"
+                        onClick={() => togglePairing(p.id)}
+                        className={`w-full py-1 rounded text-[9px] font-bold uppercase transition-all cursor-pointer ${
+                          isPaired
+                            ? 'text-neutral-500 hover:text-rose-600 hover:underline'
+                            : 'bg-neutral-100 text-[#121214] border border-[#121214] hover:bg-[#FEF08A]'
+                        }`}
+                      >
+                        {isPaired ? 'Putuskan' : '+ Hubungkan'}
+                      </button>
+                    </div>
                   </div>
-                  {p.webUrl && (
-                    <a
-                      href={p.webUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-[10px] font-bold text-neutral-700 hover:text-black underline pt-1 border-t border-neutral-100"
-                    >
-                      <span>Buka Aplikasi</span>
-                      <ExternalLink className="w-2.5 h-2.5" />
-                    </a>
-                  )}
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
@@ -166,26 +237,27 @@ export const BankSyncModal: React.FC<BankSyncModalProps> = ({
         {activeTab === 'schema' && (
           <div className="space-y-3 text-xs leading-relaxed font-bold text-neutral-700">
             <div className="p-3 bg-[#DDD6FE] border-2 border-[#121214] rounded-xl text-[#121214] shadow-[2px_2px_0px_#121214]">
-              <span className="font-black text-xs uppercase block mb-1">
-                Alur Integrasi Otomatis (Android Native)
+              <span className="font-black text-xs uppercase flex items-center gap-1.5 mb-1">
+                <Sparkles className="w-4 h-4 text-purple-800" />
+                <span>Alur Integrasi & Buka Aplikasi Otomatis</span>
               </span>
               <p className="text-[11px] leading-relaxed">
-                Di Android, Capacitor menghubungkan listener sistem notifikasi ke aplikasi diduitin secara lokal tanpa memerlukan izin internet atau server pihak ketiga.
+                Di Android, tombol "Buka Aplikasi" mengirimkan *App Intent* resmi ke sistem OS untuk langsung memindahkan layar ke aplikasi BCA, Livin, GoPay, OVO, atau DANA yang terpasang di HP Anda.
               </p>
             </div>
 
             <ol className="space-y-2 list-decimal list-inside pl-1 text-[11px]">
               <li>
-                <strong>Notifikasi Masuk:</strong> HP Anda menerima notifikasi mutasi dari BCA, Livin, BRImo, BNI, BJB, BSI, CIMB Niaga, SeaBank, Bank Jago, Jenius, GoPay, OVO, DANA, dll.
+                <strong>Buka Aplikasi Instan:</strong> Klik "Buka Aplikasi", HP otomatis meluncurkan aplikasi bank/e-wallet Anda.
               </li>
               <li>
-                <strong>Filter Cerdas:</strong> Algoritma RegExp mem-parsing nominal rupiah, nama penerima/merchant, dan jenis transaksi (uang masuk/keluar).
+                <strong>Status Terhubung:</strong> Akun berstatus "Terhubung" otomatis menyinkronkan setiap mutasi yang Anda lakukan di aplikasi tersebut.
               </li>
               <li>
-                <strong>Pencatatan Otomatis:</strong> Transaksi langsung tercatat ke dalam database lokal Dexie DB dan memotong/menambah saldo dompet terkait.
+                <strong>Deteksi Notifikasi Lokal:</strong> Listener notifikasi di Android membaca nominal dan nama merchant secara otomatis saat transaksi selesai.
               </li>
               <li>
-                <strong>Privasi Terjamin:</strong> Data finansial tidak dikirim ke server luar, 100% tersimpan aman di HP Anda.
+                <strong>Privasi 100% Aman:</strong> Tidak ada permintaan PIN / password / login perbankan di diduitin.
               </li>
             </ol>
           </div>

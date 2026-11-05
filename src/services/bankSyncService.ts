@@ -8,6 +8,7 @@ export interface BankSyncRule {
   color: string;
   patterns: RegExp[];
   appScheme?: string;
+  packageName?: string; // Android package name untuk direct open intent
   webUrl?: string;
   keywords?: string[];
 }
@@ -37,6 +38,7 @@ export const SUPPORTED_FINANCIAL_PROVIDERS: BankSyncRule[] = [
     type: 'bank',
     color: '#005E9E',
     appScheme: 'bca://',
+    packageName: 'com.bca',
     webUrl: 'https://m.klikbca.com',
     keywords: ['bca', 'klikbca', 'mybca'],
     patterns: [
@@ -51,6 +53,7 @@ export const SUPPORTED_FINANCIAL_PROVIDERS: BankSyncRule[] = [
     type: 'bank',
     color: '#003366',
     appScheme: 'livin://',
+    packageName: 'com.bankmandiri.livin',
     webUrl: 'https://bankmandiri.co.id',
     keywords: ['mandiri', 'livin'],
     patterns: [
@@ -65,6 +68,7 @@ export const SUPPORTED_FINANCIAL_PROVIDERS: BankSyncRule[] = [
     type: 'bank',
     color: '#00529C',
     appScheme: 'brimo://',
+    packageName: 'id.co.bri.brimo',
     webUrl: 'https://bri.co.id',
     keywords: ['bri', 'brimo'],
     patterns: [
@@ -79,6 +83,7 @@ export const SUPPORTED_FINANCIAL_PROVIDERS: BankSyncRule[] = [
     type: 'bank',
     color: '#E05929',
     appScheme: 'bni://',
+    packageName: 'src.misa.bni.mb',
     webUrl: 'https://bni.co.id',
     keywords: ['bni', 'wondr'],
     patterns: [
@@ -92,6 +97,7 @@ export const SUPPORTED_FINANCIAL_PROVIDERS: BankSyncRule[] = [
     type: 'bank',
     color: '#006699',
     appScheme: 'bjb://',
+    packageName: 'com.bankbjb.digimobile',
     webUrl: 'https://bankbjb.co.id',
     keywords: ['bjb', 'digi bjb'],
     patterns: [
@@ -105,6 +111,7 @@ export const SUPPORTED_FINANCIAL_PROVIDERS: BankSyncRule[] = [
     type: 'bank',
     color: '#00A39D',
     appScheme: 'bsi://',
+    packageName: 'com.bsi.mobile',
     webUrl: 'https://bankbsi.co.id',
     keywords: ['bsi', 'bsi mobile'],
     patterns: [
@@ -118,6 +125,7 @@ export const SUPPORTED_FINANCIAL_PROVIDERS: BankSyncRule[] = [
     type: 'bank',
     color: '#7B1113',
     appScheme: 'octomobile://',
+    packageName: 'cimb.niaga.mobile.android',
     webUrl: 'https://cimbniaga.co.id',
     keywords: ['cimb', 'octo', 'niaga'],
     patterns: [
@@ -131,6 +139,7 @@ export const SUPPORTED_FINANCIAL_PROVIDERS: BankSyncRule[] = [
     type: 'bank',
     color: '#FF5722',
     appScheme: 'seabank://',
+    packageName: 'com.seabank.id',
     webUrl: 'https://seabank.co.id',
     keywords: ['seabank', 'sea bank'],
     patterns: [
@@ -145,6 +154,7 @@ export const SUPPORTED_FINANCIAL_PROVIDERS: BankSyncRule[] = [
     type: 'bank',
     color: '#9333EA',
     appScheme: 'jago://',
+    packageName: 'com.jago.digitalBanking',
     webUrl: 'https://jago.com',
     keywords: ['jago', 'bank jago'],
     patterns: [
@@ -158,6 +168,7 @@ export const SUPPORTED_FINANCIAL_PROVIDERS: BankSyncRule[] = [
     type: 'bank',
     color: '#0284C7',
     appScheme: 'jenius://',
+    packageName: 'com.btpn.dc',
     webUrl: 'https://jenius.com',
     keywords: ['jenius', 'btpn'],
     patterns: [
@@ -171,6 +182,7 @@ export const SUPPORTED_FINANCIAL_PROVIDERS: BankSyncRule[] = [
     type: 'bank',
     color: '#16A34A',
     appScheme: 'permatame://',
+    packageName: 'net.myinfosys.permata.mobile.android',
     webUrl: 'https://permatabank.com',
     keywords: ['permata', 'permatame'],
     patterns: [
@@ -184,6 +196,7 @@ export const SUPPORTED_FINANCIAL_PROVIDERS: BankSyncRule[] = [
     type: 'bank',
     color: '#EA580C',
     appScheme: 'dbank://',
+    packageName: 'com.danamon.dbankpro',
     webUrl: 'https://danamon.co.id',
     keywords: ['danamon', 'd-bank'],
     patterns: [
@@ -197,6 +210,7 @@ export const SUPPORTED_FINANCIAL_PROVIDERS: BankSyncRule[] = [
     type: 'bank',
     color: '#0284C7',
     appScheme: 'blubybcadigital://',
+    packageName: 'com.bca.digital.blu',
     webUrl: 'https://blubybcadigital.id',
     keywords: ['blu', 'bca digital'],
     patterns: [
@@ -212,6 +226,7 @@ export const SUPPORTED_FINANCIAL_PROVIDERS: BankSyncRule[] = [
     type: 'ewallet',
     color: '#00AED6',
     appScheme: 'gojek://gopay',
+    packageName: 'com.gojek.app',
     webUrl: 'https://gopay.co.id',
     keywords: ['gopay', 'gojek'],
     patterns: [
@@ -226,6 +241,7 @@ export const SUPPORTED_FINANCIAL_PROVIDERS: BankSyncRule[] = [
     type: 'ewallet',
     color: '#4C3494',
     appScheme: 'ovo://',
+    packageName: 'ovo.id',
     webUrl: 'https://www.ovo.id',
     keywords: ['ovo'],
     patterns: [
@@ -240,6 +256,7 @@ export const SUPPORTED_FINANCIAL_PROVIDERS: BankSyncRule[] = [
     type: 'ewallet',
     color: '#118EEA',
     appScheme: 'dana://',
+    packageName: 'id.dana',
     webUrl: 'https://dana.id',
     keywords: ['dana'],
     patterns: [
@@ -254,6 +271,7 @@ export const SUPPORTED_FINANCIAL_PROVIDERS: BankSyncRule[] = [
     type: 'ewallet',
     color: '#EE4D2D',
     appScheme: 'shopeeid://',
+    packageName: 'com.shopee.id',
     webUrl: 'https://shopee.co.id',
     keywords: ['shopee', 'shopeepay'],
     patterns: [
@@ -268,6 +286,7 @@ export const SUPPORTED_FINANCIAL_PROVIDERS: BankSyncRule[] = [
     type: 'ewallet',
     color: '#DC2626',
     appScheme: 'linkaja://',
+    packageName: 'com.telkom.tcash',
     webUrl: 'https://linkaja.id',
     keywords: ['linkaja'],
     patterns: [
@@ -281,6 +300,7 @@ export const SUPPORTED_FINANCIAL_PROVIDERS: BankSyncRule[] = [
     type: 'ewallet',
     color: '#2563EB',
     appScheme: 'astrapay://',
+    packageName: 'com.astrapay.app',
     webUrl: 'https://astrapay.com',
     keywords: ['astrapay', 'astra pay'],
     patterns: [

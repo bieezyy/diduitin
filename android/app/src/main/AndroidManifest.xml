@@ -38,4 +38,32 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+
+    <!-- Queries deklarasi agar Android 11+ mengizinkan peluncuran aplikasi m-Banking & E-Wallet -->
+    <queries>
+        <package android:name="com.bca" />
+        <package android:name="com.bankmandiri.livin" />
+        <package android:name="id.co.bri.brimo" />
+        <package android:name="src.misa.bni.mb" />
+        <package android:name="com.bankbjb.digimobile" />
+        <package android:name="com.bsi.mobile" />
+        <package android:name="cimb.niaga.mobile.android" />
+        <package android:name="com.seabank.id" />
+        <package android:name="com.jago.digitalBanking" />
+        <package android:name="com.btpn.dc" />
+        <package android:name="net.myinfosys.permata.mobile.android" />
+        <package android:name="com.danamon.dbankpro" />
+        <package android:name="com.bca.digital.blu" />
+        <package android:name="com.gojek.app" />
+        <package android:name="ovo.id" />
+        <package android:name="id.dana" />
+        <package android:name="com.shopee.id" />
+        <package android:name="com.telkom.tcash" />
+        <package android:name="com.astrapay.app" />
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" />
+        </intent>
+    </queries>
 </manifest>

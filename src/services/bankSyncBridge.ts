@@ -1,32 +1,8 @@
 /**
  * Skema Arsitektur Integrasi Mobile Banking & E-Wallet pada Aplikasi "diduitin"
- * 
- * Flow / Diagram Alur:
- * 
- * [Android Notification / SMS]
- *          |
- *          v
- * [NotificationListenerService (Android Native)]
- *          |
- *          v (Filter Package: com.bca, com.bankmandiri.livin, id.co.bri.brimo, com.gojek.app, id.dana, dsb)
- * [Capacitor Bridge Event: 'onBankNotification']
- *          |
- *          v
- * [bankSyncService.ts -> parseBankNotificationText()]
- *          |
- *          +---> Ekstrak: Bank, Tipe (Expense/Income), Nominal (Rp), Nama Merchant
- *          |
- *          v
- * [Auto-Assign ke Wallet Terkait] (Cocokkan nama dompet seperti "BCA", "GoPay", dsb)
- *          |
- *          v
- * [Simpan Transaksi Otomatis ke Dexie DB] -> Update Saldo Dompet Real-time
- *          |
- *          v
- * [Notifikasi Lokal / Toast]: "Transaksi BCA Rp 45.000 (Kopi Kenangan) berhasil dicatat otomatis!"
  */
 
-import { parseBankNotificationText, type ParsedBankNotification } from '../services/bankSyncService';
+import { parseBankNotificationText, type ParsedBankNotification, type BankSyncRule } from '../services/bankSyncService';
 import { db } from '../db';
 import type { Wallet } from '../types';
 
@@ -109,12 +85,50 @@ export async function syncBankTransactionToDb(
 }
 
 /**
+ * Membuka aplikasi Android/iOS target langsung secara Native
+ * Menggunakan intent Android package jika di HP, fallback ke app scheme, lalu fallback ke web
+ */
+export function openFinancialApp(provider: BankSyncRule) {
+  if (typeof window === 'undefined') return;
+
+  const isAndroid = /android/i.test(navigator.userAgent);
+
+  // 1. Android Native Intent via Package Name (Membuka aplikasi HP langsung)
+  if (isAndroid && provider.packageName) {
+    const intentUrl = `intent:#Intent;package=${provider.packageName};action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;end`;
+    window.location.href = intentUrl;
+    return;
+  }
+
+  // 2. iOS / Generic Custom App Scheme (bca://, ovo://, dana://)
+  if (provider.appScheme) {
+    window.location.href = provider.appScheme;
+    
+    // Fallback jika belum terinstall di HP
+    setTimeout(() => {
+      if (document.hasFocus()) {
+        if (isAndroid && provider.packageName) {
+          window.location.href = `https://play.google.com/store/apps/details?id=${provider.packageName}`;
+        } else if (provider.webUrl) {
+          window.open(provider.webUrl, '_blank');
+        }
+      }
+    }, 1200);
+    return;
+  }
+
+  // 3. Fallback Web
+  if (provider.webUrl) {
+    window.open(provider.webUrl, '_blank');
+  }
+}
+
+/**
  * Setup listener notifikasi jika berjalan di lingkungan Capacitor Native Android
  */
 export function setupAndroidBankNotificationListener(
   onNotificationReceived: (parsed: ParsedBankNotification) => void
 ) {
-  // Listener untuk custom event dari plugin Capacitor NotificationListener
   if (typeof window !== 'undefined') {
     const handleNativeEvent = (event: any) => {
       const notificationText = event?.detail?.text || event?.detail?.body || '';
