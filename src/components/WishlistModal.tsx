@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import type { Wallet, WishlistTarget } from '../types';
 import { db } from '../db';
 import { formatRupiah } from '../constants/categories';
-import { X, Sparkles, Plus, Trash2 } from 'lucide-react';
+import { X, Sparkles, Plus, Trash2, ExternalLink, Link2 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { ActionModal, type AlertModalState } from './ActionModal';
 
@@ -24,6 +24,7 @@ export const WishlistModal: React.FC<WishlistModalProps> = ({
   const [isAdding, setIsAdding] = useState(false);
   const [title, setTitle] = useState('');
   const [targetAmountStr, setTargetAmountStr] = useState('');
+  const [itemUrl, setItemUrl] = useState('');
   const [cemplungModal, setCemplungModal] = useState<WishlistTarget | null>(null);
   const [cemplungAmountStr, setCemplungAmountStr] = useState('');
   const [sourceWalletId, setSourceWalletId] = useState(wallets[0]?.id || '');
@@ -59,16 +60,23 @@ export const WishlistModal: React.FC<WishlistModalProps> = ({
       return;
     }
 
+    let formattedUrl = itemUrl.trim();
+    if (formattedUrl && !/^https?:\/\//i.test(formattedUrl)) {
+      formattedUrl = 'https://' + formattedUrl;
+    }
+
     await db.wishlists.add({
       id: `wish-${Date.now()}`,
       title: title.trim(),
       targetAmount: target,
       savedAmount: 0,
+      itemUrl: formattedUrl || undefined,
       createdAt: Date.now()
     });
 
     setTitle('');
     setTargetAmountStr('');
+    setItemUrl('');
     setIsAdding(false);
     onRefresh();
   };
@@ -200,9 +208,23 @@ export const WishlistModal: React.FC<WishlistModalProps> = ({
                   }`}
                 >
                   <div className="flex items-start justify-between">
-                    <div>
-                      <h3 className="text-xs font-black text-[#121214]">{w.title}</h3>
-                      <span className="text-[11px] font-bold text-neutral-600">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <h3 className="text-xs font-black text-[#121214]">{w.title}</h3>
+                        {w.itemUrl && (
+                          <a
+                            href={w.itemUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-white border border-[#121214] text-[10px] font-bold text-sky-700 hover:text-sky-900 hover:bg-sky-50 shadow-[1px_1px_0px_#121214] transition-all"
+                            title="Buka Link Barang"
+                          >
+                            <ExternalLink className="w-2.5 h-2.5" />
+                            <span>Link</span>
+                          </a>
+                        )}
+                      </div>
+                      <span className="text-[11px] font-bold text-neutral-600 block">
                         {formatRupiah(w.savedAmount)} / {formatRupiah(w.targetAmount)}
                       </span>
                     </div>
@@ -324,6 +346,21 @@ export const WishlistModal: React.FC<WishlistModalProps> = ({
               onChange={e => setTargetAmountStr(e.target.value.replace(/\D/g, ''))}
               className="brutal-input w-full text-xs font-black"
             />
+            <div>
+              <div className="flex items-center gap-1 mb-1">
+                <Link2 className="w-3 h-3 text-neutral-600" />
+                <label className="text-[10px] font-black uppercase text-neutral-600">
+                  Link Barang / Keinginan (Opsional):
+                </label>
+              </div>
+              <input
+                type="url"
+                placeholder="https://tokopedia.link/... atau shopee.co.id/..."
+                value={itemUrl}
+                onChange={e => setItemUrl(e.target.value)}
+                className="brutal-input w-full text-xs"
+              />
+            </div>
             <div className="flex gap-2 justify-end pt-1">
               <button
                 type="button"

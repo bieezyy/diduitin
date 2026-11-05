@@ -3,6 +3,7 @@ import { db } from '../db';
 import type { Wallet, Transaction, TransactionType, SpendingNature, SpendingMood } from '../types';
 import { ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Check, X, Delete, Smile, Meh, Frown, Camera } from 'lucide-react';
 import { compressReceiptImage } from '../utils/imageCompressor';
+import { triggerHaptic } from '../utils/haptics';
 import confetti from 'canvas-confetti';
 import { ActionModal, type AlertModalState } from './ActionModal';
 
@@ -12,6 +13,7 @@ interface QuickEntryModalProps {
   wallets: Wallet[];
   onSuccess: () => void;
   editTransaction?: Transaction | null;
+  activeFilterWalletId?: string | null;
 }
 
 export const QuickEntryModal: React.FC<QuickEntryModalProps> = ({
@@ -19,7 +21,8 @@ export const QuickEntryModal: React.FC<QuickEntryModalProps> = ({
   onClose,
   wallets = [],
   onSuccess,
-  editTransaction
+  editTransaction,
+  activeFilterWalletId
 }) => {
   const [type, setType] = useState<TransactionType>('expense');
   const [amountStr, setAmountStr] = useState<string>('');
@@ -53,10 +56,21 @@ export const QuickEntryModal: React.FC<QuickEntryModalProps> = ({
         setMood(editTransaction.mood || 'worth');
         setReceiptImage(editTransaction.receiptImage || null);
       } else {
+        // Cerdas memilih dompet: prioritaskan filter aktif dashboard, lalu last used, lalu dompet pertama
+        const lastUsedId = localStorage.getItem('diduitin_last_used_wallet_id');
+        const defaultWalletId =
+          (activeFilterWalletId && wallets.some(w => w.id === activeFilterWalletId))
+            ? activeFilterWalletId
+            : (lastUsedId && wallets.some(w => w.id === lastUsedId))
+            ? lastUsedId
+            : wallets.length > 0
+            ? wallets[0].id
+            : '';
+
         setType('expense');
         setAmountStr('');
-        setSelectedWalletId(wallets.length > 0 ? wallets[0].id : '');
-        setTargetWalletId(wallets.length > 1 ? wallets[1].id : '');
+        setSelectedWalletId(defaultWalletId);
+        setTargetWalletId(wallets.length > 1 ? (wallets.find(w => w.id !== defaultWalletId)?.id || wallets[1].id) : '');
         setCategoryInput('');
         setNote('');
         setNature('need');
@@ -64,11 +78,12 @@ export const QuickEntryModal: React.FC<QuickEntryModalProps> = ({
         setReceiptImage(null);
       }
     }
-  }, [isOpen, editTransaction, wallets]);
+  }, [isOpen, editTransaction, wallets, activeFilterWalletId]);
 
   if (!isOpen) return null;
 
   const handleNumpadClick = (val: string) => {
+    triggerHaptic('light');
     if (val === 'C') {
       setAmountStr('');
       return;
@@ -250,12 +265,18 @@ export const QuickEntryModal: React.FC<QuickEntryModalProps> = ({
       }
 
       // Animasi feedback positif
+      triggerHaptic('success');
       if (type === 'income' || mood === 'worth') {
         confetti({
           particleCount: 50,
           spread: 60,
           origin: { y: 0.8 }
         });
+      }
+
+      // Simpan dompet terakhir yang dipakai untuk auto-assign transaksi berikutnya
+      if (activeWalletId) {
+        localStorage.setItem('diduitin_last_used_wallet_id', activeWalletId);
       }
 
       // Reset form

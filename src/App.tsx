@@ -1,21 +1,25 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, lazy, Suspense } from 'react';
 import { db, seedInitialDataIfNeeded } from './db';
 import type { Wallet, Transaction, WishlistTarget, DebtMemo, Subscription } from './types';
 import { RealitiCheck } from './components/RealitiCheck';
 import { TransactionList } from './components/TransactionList';
 import { QuickEntryModal } from './components/QuickEntryModal';
 import { WalletsModal } from './components/WalletsModal';
-import { SettingsModal } from './components/SettingsModal';
-import { WishlistModal } from './components/WishlistModal';
-import { SplitBillModal } from './components/SplitBillModal';
-import { DebtMemoModal } from './components/DebtMemoModal';
-import { SubscriptionModal } from './components/SubscriptionModal';
-import { OnboardingModal } from './components/OnboardingModal';
-import { WrappedCardModal } from './components/WrappedCardModal';
-import { ProfileModal } from './components/ProfileModal';
-import { PinLockModal } from './components/PinLockModal';
+import { LottieLoader } from './components/LottieLoader';
 import { ActionModal, type AlertModalState } from './components/ActionModal';
-import { Plus, Settings, Wallet as WalletIcon, User } from 'lucide-react';
+import { Plus, Settings, Wallet as WalletIcon, User, Zap } from 'lucide-react';
+
+// Lazy loading modal-modal sekunder untuk memangkas initial bundle
+const SettingsModal = lazy(() => import('./components/SettingsModal').then(m => ({ default: m.SettingsModal })));
+const WishlistModal = lazy(() => import('./components/WishlistModal').then(m => ({ default: m.WishlistModal })));
+const SplitBillModal = lazy(() => import('./components/SplitBillModal').then(m => ({ default: m.SplitBillModal })));
+const DebtMemoModal = lazy(() => import('./components/DebtMemoModal').then(m => ({ default: m.DebtMemoModal })));
+const SubscriptionModal = lazy(() => import('./components/SubscriptionModal').then(m => ({ default: m.SubscriptionModal })));
+const OnboardingModal = lazy(() => import('./components/OnboardingModal').then(m => ({ default: m.OnboardingModal })));
+const WrappedCardModal = lazy(() => import('./components/WrappedCardModal').then(m => ({ default: m.WrappedCardModal })));
+const ProfileModal = lazy(() => import('./components/ProfileModal').then(m => ({ default: m.ProfileModal })));
+const PinLockModal = lazy(() => import('./components/PinLockModal').then(m => ({ default: m.PinLockModal })));
+const BankSyncModal = lazy(() => import('./components/BankSyncModal').then(m => ({ default: m.BankSyncModal })));
 
 export function App() {
   const [wallets, setWallets] = useState<Wallet[]>([]);
@@ -40,6 +44,7 @@ export function App() {
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
   const [isWrappedOpen, setIsWrappedOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isBankSyncOpen, setIsBankSyncOpen] = useState(false);
   const [isAppUnlocked, setIsAppUnlocked] = useState(false);
   const [appAlert, setAppAlert] = useState<AlertModalState>({
     isOpen: false,
@@ -189,9 +194,9 @@ export function App() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4">
-        <div className="brutal-card p-4 bg-[#FDE047] text-xs font-black uppercase tracking-wider animate-pulse">
-          Memuat Catatan diduitin...
+      <div className="min-h-screen bg-[#F0F0F3] sm:py-6 flex items-center justify-center p-4">
+        <div className="w-full max-w-[440px] min-h-[420px] bg-white border-3 border-[#121214] rounded-3xl shadow-[8px_8px_0px_#121214] flex flex-col items-center justify-center">
+          <LottieLoader text="Memuat Catatan diduitin..." size={140} />
         </div>
       </div>
     );
@@ -214,6 +219,13 @@ export function App() {
             </div>
 
             <div className="flex items-center gap-2">
+              <button
+                onClick={() => setIsBankSyncOpen(true)}
+                className="p-2 border-2 border-[#121214] rounded-lg hover:bg-neutral-100 active:translate-x-0.5 active:translate-y-0.5 cursor-pointer bg-[#A3E635]"
+                title="Auto-Sync Bank & E-Wallet"
+              >
+                <Zap className="w-4 h-4 text-[#121214] stroke-[2.5]" />
+              </button>
               <button
                 onClick={() => setIsProfileOpen(true)}
                 className="p-2 border-2 border-[#121214] rounded-lg hover:bg-neutral-100 active:translate-x-0.5 active:translate-y-0.5 cursor-pointer bg-sky-100"
@@ -301,6 +313,7 @@ export function App() {
         wallets={wallets}
         onSuccess={loadData}
         editTransaction={editingTransaction}
+        activeFilterWalletId={selectedWalletFilterId}
       />
 
       <WalletsModal
@@ -310,75 +323,103 @@ export function App() {
         selectedWalletFilterId={selectedWalletFilterId}
         onSelectWalletFilter={setSelectedWalletFilterId}
         onRefresh={loadData}
+        onOpenBankSync={() => setIsBankSyncOpen(true)}
       />
 
-      <SettingsModal
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-        currentBudget={monthlyBudget}
-        onOpenOnboarding={() => setIsOnboardingOpen(true)}
-        onRefresh={loadData}
-        mode={settingsMode}
-      />
+      <Suspense fallback={null}>
+        {isSettingsOpen && (
+          <SettingsModal
+            isOpen={isSettingsOpen}
+            onClose={() => setIsSettingsOpen(false)}
+            currentBudget={monthlyBudget}
+            onOpenOnboarding={() => setIsOnboardingOpen(true)}
+            onRefresh={loadData}
+            mode={settingsMode}
+          />
+        )}
 
-      <WishlistModal
-        isOpen={isWishlistOpen}
-        onClose={() => setIsWishlistOpen(false)}
-        wishlists={wishlists}
-        wallets={wallets}
-        onRefresh={loadData}
-      />
+        {isWishlistOpen && (
+          <WishlistModal
+            isOpen={isWishlistOpen}
+            onClose={() => setIsWishlistOpen(false)}
+            wishlists={wishlists}
+            wallets={wallets}
+            onRefresh={loadData}
+          />
+        )}
 
-      <SplitBillModal
-        isOpen={isSplitBillOpen}
-        onClose={() => setIsSplitBillOpen(false)}
-        onRefresh={loadData}
-      />
+        {isSplitBillOpen && (
+          <SplitBillModal
+            isOpen={isSplitBillOpen}
+            onClose={() => setIsSplitBillOpen(false)}
+            onRefresh={loadData}
+          />
+        )}
 
-      <DebtMemoModal
-        isOpen={isDebtOpen}
-        onClose={() => setIsDebtOpen(false)}
-        debts={debts}
-        wallets={wallets}
-        onRefresh={loadData}
-      />
+        {isDebtOpen && (
+          <DebtMemoModal
+            isOpen={isDebtOpen}
+            onClose={() => setIsDebtOpen(false)}
+            debts={debts}
+            wallets={wallets}
+            onRefresh={loadData}
+          />
+        )}
 
-      <SubscriptionModal
-        isOpen={isSubscriptionOpen}
-        onClose={() => setIsSubscriptionOpen(false)}
-        subscriptions={subscriptions}
-        wallets={wallets}
-        onRefresh={loadData}
-      />
+        {isSubscriptionOpen && (
+          <SubscriptionModal
+            isOpen={isSubscriptionOpen}
+            onClose={() => setIsSubscriptionOpen(false)}
+            subscriptions={subscriptions}
+            wallets={wallets}
+            onRefresh={loadData}
+          />
+        )}
 
-      <OnboardingModal
-        isOpen={isOnboardingOpen}
-        onClose={handleCloseOnboarding}
-      />
+        {isOnboardingOpen && (
+          <OnboardingModal
+            isOpen={isOnboardingOpen}
+            onClose={handleCloseOnboarding}
+          />
+        )}
 
-      <ProfileModal
-        isOpen={isProfileOpen}
-        onClose={() => setIsProfileOpen(false)}
-        onOpenOnboarding={() => setIsOnboardingOpen(true)}
-      />
+        {isProfileOpen && (
+          <ProfileModal
+            isOpen={isProfileOpen}
+            onClose={() => setIsProfileOpen(false)}
+            onOpenOnboarding={() => setIsOnboardingOpen(true)}
+          />
+        )}
 
-      <WrappedCardModal
-        isOpen={isWrappedOpen}
-        onClose={() => setIsWrappedOpen(false)}
-        monthlyExpense={monthlyExpense}
-        monthlyBudget={monthlyBudget}
-        needPercent={needPercent}
-        wantPercent={wantPercent}
-        regretExpense={regretExpense}
-        topCategory={topCategory}
-      />
+        {isBankSyncOpen && (
+          <BankSyncModal
+            isOpen={isBankSyncOpen}
+            onClose={() => setIsBankSyncOpen(false)}
+            wallets={wallets}
+            onRefresh={loadData}
+          />
+        )}
+
+        {isWrappedOpen && (
+          <WrappedCardModal
+            isOpen={isWrappedOpen}
+            onClose={() => setIsWrappedOpen(false)}
+            monthlyExpense={monthlyExpense}
+            monthlyBudget={monthlyBudget}
+            needPercent={needPercent}
+            wantPercent={wantPercent}
+            regretExpense={regretExpense}
+            topCategory={topCategory}
+          />
+        )}
+
+        {!isAppUnlocked && (
+          <PinLockModal onUnlock={() => setIsAppUnlocked(true)} />
+        )}
+      </Suspense>
+
       {/* App Level Action / Alert Overlay Modal */}
       <ActionModal {...appAlert} />
-
-      {/* Lockscreen / Gatekeeper PIN Pertama */}
-      {!isAppUnlocked && (
-        <PinLockModal onUnlock={() => setIsAppUnlocked(true)} />
-      )}
     </div>
   );
 }

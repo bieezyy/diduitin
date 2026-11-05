@@ -40,6 +40,7 @@ export interface WishlistTarget {
   title: string;
   targetAmount: number;
   savedAmount: number;
+  itemUrl?: string; // Link barang/keinginan (misal: Tokopedia, Shopee, website)
   categoryIcon?: string;
   isCompleted?: boolean;
   createdAt: number;

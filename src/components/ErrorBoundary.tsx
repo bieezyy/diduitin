@@ -49,6 +49,11 @@ export class ErrorBoundary extends Component<Props, State> {
               <p className="text-xs font-bold text-neutral-500 leading-relaxed">
                 Aplikasi mendeteksi error tak terduga. Klik tombol di bawah untuk memuat ulang tampilan secara aman.
               </p>
+              {this.state.error && (
+                <div className="mt-2 p-2 bg-neutral-100 border border-neutral-300 rounded text-left overflow-x-auto text-[10px] font-mono text-rose-600 select-text">
+                  {this.state.error.message || String(this.state.error)}
+                </div>
+              )}
             </div>
 
             <button

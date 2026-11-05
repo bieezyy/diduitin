@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../db';
-import { X, Check, Coins, HelpCircle, Coffee, Copy, CheckCheck } from 'lucide-react';
+import { X, Check, Coins, HelpCircle, Coffee, CheckCheck, ArrowUpRight } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { ActionModal, type AlertModalState } from './ActionModal';
 
@@ -81,32 +81,34 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   };
 
   const handleCopyPayment = (providerName: string) => {
-    const rawNumber = '082298350902';
+    const rawNumber = '089514026211';
 
-    // 1. Salin nomor ke clipboard secara otomatis
-    navigator.clipboard.writeText(rawNumber);
+    // 1. Salin nomor ke clipboard
+    try {
+      if (navigator?.clipboard?.writeText) {
+        navigator.clipboard.writeText(rawNumber);
+      }
+    } catch {
+      // ignore
+    }
+
     setCopiedEwallet(providerName);
     confetti({ particleCount: 30, spread: 50, origin: { y: 0.7 } });
-    setTimeout(() => setCopiedEwallet(null), 3000);
+    setTimeout(() => setCopiedEwallet(null), 3500);
 
-    // 2. Direct Deep Linking langsung ke aplikasi e-wallet di HP
+    // 2. Direct Deep Linking langsung ke aplikasi e-wallet di HP agar user bisa langsung kirim dana
     if (providerName === 'DANA') {
-      // Deep link resmi DANA untuk transfer langsung ke nomor HP
       window.location.href = `https://link.dana.id/sendmoney?phoneNumber=${rawNumber}`;
     } else if (providerName === 'GoPay') {
-      // Membuka menu transfer GoPay langsung di aplikasi Gojek/GoPay
-      window.location.href = 'gojek://gopay/transfer';
-      // Fallback web jika tidak di HP
+      window.location.href = `gojek://gopay/transfer?phone=${rawNumber}`;
       setTimeout(() => {
         window.open('https://gopay.co.id', '_blank');
-      }, 500);
+      }, 600);
     } else if (providerName === 'OVO') {
-      // Membuka aplikasi OVO langsung di HP
       window.location.href = 'ovo://';
-      // Fallback web jika tidak di HP
       setTimeout(() => {
         window.open('https://www.ovo.id', '_blank');
-      }, 500);
+      }, 600);
     }
   };
 
@@ -242,7 +244,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
 
               <p className="text-[11px] text-neutral-800 font-bold leading-relaxed bg-white/70 p-2.5 rounded-lg border border-[#121214]">
-                Suka pakai diduitin? Klik salah satu tombol di bawah untuk menyalin nomor dan langsung membuka pembayaran via OVO, DANA, atau GoPay:
+                Suka pakai diduitin? Klik salah satu e-wallet di bawah untuk langsung membuka transfer di aplikasi OVO, DANA, atau GoPay Anda:
               </p>
 
               <div className="grid grid-cols-3 gap-2 pt-1">
@@ -250,12 +252,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <button
                   type="button"
                   onClick={() => handleCopyPayment('OVO')}
-                  className="brutal-btn py-2 px-1 text-xs uppercase bg-[#EDE9FE] hover:bg-[#DDD6FE] text-[#4C1D95] font-black flex flex-col items-center gap-0.5 cursor-pointer shadow-[2px_2px_0px_#121214]"
+                  className="brutal-btn py-2 px-1 text-xs uppercase bg-[#EDE9FE] hover:bg-[#DDD6FE] text-[#4C1D95] font-black flex flex-col items-center gap-0.5 cursor-pointer shadow-[2px_2px_0px_#121214] active:translate-x-0.5 active:translate-y-0.5"
                 >
                   <span>OVO</span>
                   <span className="text-[9px] font-bold flex items-center gap-0.5">
-                    {copiedEwallet === 'OVO' ? <CheckCheck className="w-3 h-3 text-emerald-700" /> : <Copy className="w-2.5 h-2.5" />}
-                    {copiedEwallet === 'OVO' ? 'Tersalin' : 'Kirim'}
+                    {copiedEwallet === 'OVO' ? <CheckCheck className="w-3 h-3 text-emerald-700" /> : <ArrowUpRight className="w-2.5 h-2.5" />}
+                    {copiedEwallet === 'OVO' ? 'Dialihkan' : 'Kirim'}
                   </span>
                 </button>
 
@@ -263,12 +265,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <button
                   type="button"
                   onClick={() => handleCopyPayment('DANA')}
-                  className="brutal-btn py-2 px-1 text-xs uppercase bg-[#E0F2FE] hover:bg-[#BAE6FD] text-[#0369A1] font-black flex flex-col items-center gap-0.5 cursor-pointer shadow-[2px_2px_0px_#121214]"
+                  className="brutal-btn py-2 px-1 text-xs uppercase bg-[#E0F2FE] hover:bg-[#BAE6FD] text-[#0369A1] font-black flex flex-col items-center gap-0.5 cursor-pointer shadow-[2px_2px_0px_#121214] active:translate-x-0.5 active:translate-y-0.5"
                 >
                   <span>DANA</span>
                   <span className="text-[9px] font-bold flex items-center gap-0.5">
-                    {copiedEwallet === 'DANA' ? <CheckCheck className="w-3 h-3 text-emerald-700" /> : <Copy className="w-2.5 h-2.5" />}
-                    {copiedEwallet === 'DANA' ? 'Tersalin' : 'Kirim'}
+                    {copiedEwallet === 'DANA' ? <CheckCheck className="w-3 h-3 text-emerald-700" /> : <ArrowUpRight className="w-2.5 h-2.5" />}
+                    {copiedEwallet === 'DANA' ? 'Dialihkan' : 'Kirim'}
                   </span>
                 </button>
 
@@ -276,19 +278,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <button
                   type="button"
                   onClick={() => handleCopyPayment('GoPay')}
-                  className="brutal-btn py-2 px-1 text-xs uppercase bg-[#DCFCE7] hover:bg-[#BBF7D0] text-[#15803D] font-black flex flex-col items-center gap-0.5 cursor-pointer shadow-[2px_2px_0px_#121214]"
+                  className="brutal-btn py-2 px-1 text-xs uppercase bg-[#DCFCE7] hover:bg-[#BBF7D0] text-[#15803D] font-black flex flex-col items-center gap-0.5 cursor-pointer shadow-[2px_2px_0px_#121214] active:translate-x-0.5 active:translate-y-0.5"
                 >
                   <span>GoPay</span>
                   <span className="text-[9px] font-bold flex items-center gap-0.5">
-                    {copiedEwallet === 'GoPay' ? <CheckCheck className="w-3 h-3 text-emerald-700" /> : <Copy className="w-2.5 h-2.5" />}
-                    {copiedEwallet === 'GoPay' ? 'Tersalin' : 'Kirim'}
+                    {copiedEwallet === 'GoPay' ? <CheckCheck className="w-3 h-3 text-emerald-700" /> : <ArrowUpRight className="w-2.5 h-2.5" />}
+                    {copiedEwallet === 'GoPay' ? 'Dialihkan' : 'Kirim'}
                   </span>
                 </button>
               </div>
 
               {copiedEwallet && (
                 <div className="text-[10px] font-black text-center text-emerald-800 bg-white p-1 rounded border border-[#121214]">
-                  Nomor 082298350902 berhasil disalin ke clipboard & aplikasi dibuka ✓
+                  Aplikasi {copiedEwallet} dibuka untuk proses kirim dana ✓
                 </div>
               )}
             </div>

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import type { Wallet } from '../types';
 import { db } from '../db';
 import { formatRupiah } from '../constants/categories';
-import { X, Plus, Trash2, Wallet as WalletIcon, Check, Edit2, ArrowLeftRight } from 'lucide-react';
+import { X, Plus, Trash2, Wallet as WalletIcon, Check, Edit2, ArrowLeftRight, Zap } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { ActionModal, type AlertModalState } from './ActionModal';
 
@@ -13,6 +13,7 @@ interface WalletsModalProps {
   selectedWalletFilterId?: string | null;
   onSelectWalletFilter: (walletId: string | null) => void;
   onRefresh: () => void;
+  onOpenBankSync?: () => void;
 }
 
 const WALLET_COLORS = ['#38BDF8', '#A3E635', '#FACC15', '#FB7185', '#DDD6FE', '#FDA4AF'];
@@ -23,7 +24,8 @@ export const WalletsModal: React.FC<WalletsModalProps> = ({
   wallets,
   selectedWalletFilterId,
   onSelectWalletFilter,
-  onRefresh
+  onRefresh,
+  onOpenBankSync
 }) => {
   const [name, setName] = useState('');
   const [type, setType] = useState<Wallet['type']>('bank');
@@ -237,6 +239,31 @@ export const WalletsModal: React.FC<WalletsModalProps> = ({
             <X className="w-4 h-4" />
           </button>
         </div>
+
+        {/* Banner Auto-Sync Bank & E-Wallet */}
+        {onOpenBankSync && (
+          <div
+            onClick={onOpenBankSync}
+            className="p-3 bg-[#A3E635] border-2 border-[#121214] rounded-xl flex items-center justify-between cursor-pointer mb-3 shadow-[2px_2px_0px_#121214] hover:bg-[#86efac] active:translate-x-0.5 active:translate-y-0.5 transition-all"
+          >
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-white border border-[#121214] flex items-center justify-center shrink-0">
+                <Zap className="w-4 h-4 text-[#121214] stroke-[2.5]" />
+              </div>
+              <div>
+                <span className="text-[11px] font-black uppercase tracking-wider text-[#121214] block">
+                  Auto-Sync m-Banking & E-Wallet
+                </span>
+                <span className="text-[9px] font-bold text-neutral-800 block">
+                  Deteksi notifikasi BCA, Mandiri, BRI, GoPay, OVO, DANA
+                </span>
+              </div>
+            </div>
+            <span className="px-2 py-0.5 bg-[#121214] text-white text-[9px] font-black uppercase rounded shrink-0">
+              Buka
+            </span>
+          </div>
+        )}
 
         {/* List Dompet Saat Ini (Pilih, Edit, Hapus) */}
         <div className="space-y-2 mb-4">

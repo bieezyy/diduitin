@@ -14,8 +14,6 @@ import {
   Image as ImageIcon,
   Download
 } from 'lucide-react';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
 
 import { ActionModal, type AlertModalState } from './ActionModal';
 
@@ -81,7 +79,10 @@ export const TransactionList: React.FC<TransactionListProps> = ({
       const q = searchQuery.toLowerCase().trim();
       const matchCategory = tx.category.toLowerCase().includes(q);
       const matchNote = tx.note ? tx.note.toLowerCase().includes(q) : false;
-      if (!matchCategory && !matchNote) return false;
+      const matchAmount = tx.amount.toString().includes(q.replace(/\D/g, ''));
+      const sourceWalletName = walletMap.get(tx.walletId)?.name.toLowerCase() || '';
+      const matchWallet = sourceWalletName.includes(q);
+      if (!matchCategory && !matchNote && !matchAmount && !matchWallet) return false;
     }
 
     return true;
@@ -90,7 +91,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({
   const totalPages = Math.ceil(filtered.length / pageSize) || 1;
   const paginatedTransactions = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
-  const handleExportPDF = () => {
+  const handleExportPDF = async () => {
     if (filtered.length === 0) {
       setActionModal({
         isOpen: true,
@@ -104,6 +105,8 @@ export const TransactionList: React.FC<TransactionListProps> = ({
     }
 
     try {
+      const { default: jsPDF } = await import('jspdf');
+      const { default: autoTable } = await import('jspdf-autotable');
       const doc = new jsPDF();
       const now = new Date();
       const tanggalCetak = now.toLocaleDateString('id-ID', {
@@ -302,7 +305,6 @@ export const TransactionList: React.FC<TransactionListProps> = ({
             }}
             className="brutal-input py-1 px-2 text-[11px] font-black bg-[#FACC15] text-[#121214] cursor-pointer uppercase"
           >
-            <option value="all">Jenis</option>
             <option value="expense">Keluar</option>
             <option value="income">Masuk</option>
             <option value="transfer">Pindah</option>
@@ -319,7 +321,6 @@ export const TransactionList: React.FC<TransactionListProps> = ({
             }}
             className="brutal-input py-1 px-2 text-[11px] font-black bg-[#38BDF8] text-[#121214] cursor-pointer uppercase"
           >
-            <option value="all">Waktu</option>
             <option value="7days">7 Hari Terakhir</option>
             <option value="30days">30 Hari Terakhir</option>
           </select>
@@ -335,7 +336,6 @@ export const TransactionList: React.FC<TransactionListProps> = ({
             }}
             className="brutal-input py-1 px-2 text-[11px] font-black bg-[#DDD6FE] text-[#121214] cursor-pointer uppercase"
           >
-            <option value="all">Karakter</option>
             <option value="need">#Need (Kebutuhan)</option>
             <option value="want">#FOMO (Keinginan)</option>
           </select>

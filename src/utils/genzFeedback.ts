@@ -13,7 +13,7 @@ export interface GenzGreeting {
 }
 
 // Koleksi tips finansial harian yang lugas & kontekstual
-const DAILY_WISDOMS: Record<number, string[]> = {
+export const DAILY_WISDOMS: Record<number, string[]> = {
   0: [
     'Evaluasi pengeluaran akhir pekan sebelum mulai rutinitas besok.',
     'Hitung sisa anggaran minggu depan agar tidak defisit sebelum gajian.',

@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import type { Wallet, Transaction, DebtMemo } from '../types';
 import { formatRupiah } from '../constants/categories';
-import { Flame, Plus, Settings, Sparkles, BookOpen, Sun, Frown, RefreshCw, Eye, EyeOff, Shield, Clock } from 'lucide-react';
-import { getGenzGreeting } from '../utils/genzFeedback';
+import { Flame, Plus, Settings, Sparkles, BookOpen, Sun, Frown, RefreshCw, Eye, EyeOff, Shield, Clock, RotateCw } from 'lucide-react';
+import { getGenzGreeting, DAILY_WISDOMS, getJakartaTimeContext } from '../utils/genzFeedback';
 
 interface RealitiCheckProps {
   totalBalance: number;
@@ -43,28 +43,36 @@ export const RealitiCheck: React.FC<RealitiCheckProps> = ({
   const [isBalanceHidden, setIsBalanceHidden] = useState(false);
 
   // Real-time clock Jakarta (WIB)
-  const [currentTimeWIB, setCurrentTimeWIB] = useState<string>(() => {
-    return new Intl.DateTimeFormat('id-ID', {
-      timeZone: 'Asia/Jakarta',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false
-    }).format(new Date()).replace(':', '.') + ' WIB';
-  });
+  const [nowDate, setNowDate] = useState<Date>(() => new Date());
+  const [wisdomManualIndex, setWisdomManualIndex] = useState<number | null>(null);
 
   useEffect(() => {
     const timer = setInterval(() => {
-      const timeStr = new Intl.DateTimeFormat('id-ID', {
-        timeZone: 'Asia/Jakarta',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false
-      }).format(new Date()).replace(':', '.') + ' WIB';
-      setCurrentTimeWIB(timeStr);
+      setNowDate(new Date());
     }, 1000);
 
     return () => clearInterval(timer);
   }, []);
+
+  // Format digital WIB
+  const digitalTimeStr = new Intl.DateTimeFormat('id-ID', {
+    timeZone: 'Asia/Jakarta',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  }).format(nowDate).replace(/:/g, '.') + ' WIB';
+
+  // Perhitungan sudut jarum jam analog berdasarkan waktu Jakarta (WIB = UTC+7)
+  const utcTime = nowDate.getTime() + nowDate.getTimezoneOffset() * 60000;
+  const wibDate = new Date(utcTime + 7 * 3600000);
+  const hours = wibDate.getHours();
+  const minutes = wibDate.getMinutes();
+  const seconds = wibDate.getSeconds();
+
+  const secondDeg = seconds * 6; // 360 / 60
+  const minuteDeg = minutes * 6 + seconds * 0.1; // 360 / 60 + 6 / 60
+  const hourDeg = (hours % 12) * 30 + minutes * 0.5; // 360 / 12 + 30 / 60
 
   // Kalkulasi Kekayaan Bersih (Net Worth)
   const totalUnsettledLent = debts
@@ -116,6 +124,19 @@ export const RealitiCheck: React.FC<RealitiCheckProps> = ({
 
   // Dapatkan sapaan waktu Jakarta WIB
   const genzGreeting = getGenzGreeting();
+  const timeContext = getJakartaTimeContext();
+  const todayWisdomList = DAILY_WISDOMS[timeContext.dayOfWeek] || DAILY_WISDOMS[1];
+  const activeWisdomText =
+    wisdomManualIndex !== null
+      ? todayWisdomList[wisdomManualIndex % todayWisdomList.length]
+      : genzGreeting.roastWisdom;
+
+  const handleNextWisdom = () => {
+    setWisdomManualIndex(prev => {
+      const current = prev !== null ? prev : (timeContext.hour + timeContext.dayOfWeek) % todayWisdomList.length;
+      return (current + 1) % todayWisdomList.length;
+    });
+  };
 
   // Status Badge sisa budget
   let statusBadge = {
@@ -148,15 +169,12 @@ export const RealitiCheck: React.FC<RealitiCheckProps> = ({
 
   return (
     <div className="space-y-4">
-      {/* 1. Welcoming Banner Dinamis Waktu Jakarta WIB */}
-      <div className="brutal-card p-4 bg-white border-2 border-[#121214] shadow-[3px_3px_0px_#121214] space-y-2">
+      {/* 1. Welcoming Banner Dinamis Waktu Jakarta WIB dengan Jam Analog & Digital */}
+      <div className="brutal-card p-4 bg-white border-2 border-[#121214] shadow-[3px_3px_0px_#121214] space-y-3">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
-            <Clock className="w-3.5 h-3.5 text-neutral-600 stroke-[2.5]" />
-            <span className="text-[11px] font-black uppercase text-[#121214] tracking-wider">
-              {currentTimeWIB}
-            </span>
-          </div>
+          <span className="text-[10px] font-black uppercase text-neutral-500 tracking-wider">
+            Waktu Real-time Jakarta
+          </span>
           <div className="flex items-center gap-1.5">
             {onOpenWrappedModal && (
               <button
@@ -171,10 +189,103 @@ export const RealitiCheck: React.FC<RealitiCheckProps> = ({
             )}
           </div>
         </div>
+
+        {/* Layout Jam Analog & Jam Digital */}
+        <div className="flex flex-col items-center justify-center py-2 bg-[#F9F9FB] rounded-xl border-2 border-[#121214] shadow-[2px_2px_0px_#121214]">
+          {/* Jam Analog (SVG) */}
+          <div className="relative w-20 h-20 mb-2">
+            <svg viewBox="0 0 100 100" className="w-full h-full drop-shadow-[2px_2px_0px_#121214]">
+              {/* Outer Dial */}
+              <circle
+                cx="50"
+                cy="50"
+                r="46"
+                fill="#FFFFFF"
+                stroke="#121214"
+                strokeWidth="4"
+              />
+              {/* Hour Ticks */}
+              {[0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330].map(deg => {
+                const isMajor = deg % 90 === 0;
+                return (
+                  <line
+                    key={deg}
+                    x1="50"
+                    y1={isMajor ? "10" : "12"}
+                    x2="50"
+                    y2="15"
+                    stroke="#121214"
+                    strokeWidth={isMajor ? "3" : "1.5"}
+                    strokeLinecap="round"
+                    transform={`rotate(${deg} 50 50)`}
+                  />
+                );
+              })}
+
+              {/* Jarum Jam */}
+              <line
+                x1="50"
+                y1="50"
+                x2="50"
+                y2="26"
+                stroke="#121214"
+                strokeWidth="4"
+                strokeLinecap="round"
+                transform={`rotate(${hourDeg} 50 50)`}
+              />
+
+              {/* Jarum Menit */}
+              <line
+                x1="50"
+                y1="50"
+                x2="50"
+                y2="18"
+                stroke="#121214"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                transform={`rotate(${minuteDeg} 50 50)`}
+              />
+
+              {/* Jarum Detik */}
+              <line
+                x1="50"
+                y1="54"
+                x2="50"
+                y2="14"
+                stroke="#FB7185"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                transform={`rotate(${secondDeg} 50 50)`}
+              />
+
+              {/* Titik Poros Tengah */}
+              <circle cx="50" cy="50" r="3.5" fill="#121214" />
+              <circle cx="50" cy="50" r="1.5" fill="#A3E635" />
+            </svg>
+          </div>
+
+          {/* Keterangan Waktu Jam Digital di Bawah Jam Analog */}
+          <div className="flex items-center gap-1.5 px-3 py-1 bg-white border border-[#121214] rounded-md shadow-[1.5px_1.5px_0px_#121214]">
+            <Clock className="w-3.5 h-3.5 text-neutral-600 stroke-[2.5]" />
+            <span className="text-xs font-black uppercase text-[#121214] tracking-widest font-mono">
+              {digitalTimeStr}
+            </span>
+          </div>
+        </div>
         
-        <p className="text-xs text-neutral-600 font-bold leading-relaxed bg-[#F9F9FB] p-2.5 rounded-lg border border-neutral-300">
-          {genzGreeting.roastWisdom}
-        </p>
+        <div className="flex items-start justify-between gap-2 bg-[#F9F9FB] p-2.5 rounded-lg border border-neutral-300">
+          <p className="text-xs text-neutral-600 font-bold leading-relaxed flex-1">
+            {activeWisdomText}
+          </p>
+          <button
+            type="button"
+            onClick={handleNextWisdom}
+            className="p-1 text-neutral-400 hover:text-black hover:bg-neutral-200 rounded transition-colors cursor-pointer shrink-0"
+            title="Ganti Tips Finansial"
+          >
+            <RotateCw className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
 
       {/* 2. Kartu Utama: Saldo Ril dengan Fitur Sensor Saldo (Eye Toggle) */}
