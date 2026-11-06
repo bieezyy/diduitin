@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Lock, KeyRound, Delete } from 'lucide-react';
+import { Lock, KeyRound, Delete, Fingerprint } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import { soundEngine } from '../utils/soundFx';
 
 interface PinLockModalProps {
   onUnlock: () => void;
@@ -14,10 +15,45 @@ export const PinLockModal: React.FC<PinLockModalProps> = ({ onUnlock }) => {
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [shake, setShake] = useState<boolean>(false);
 
+  const [hasBiometrics, setHasBiometrics] = useState<boolean>(false);
+
   useEffect(() => {
     const savedPin = localStorage.getItem('diduitin_user_pin');
     setHasPin(Boolean(savedPin));
+    if (window.PublicKeyCredential) {
+      setHasBiometrics(true);
+    }
   }, []);
+
+  const handleBiometricAuth = async () => {
+    soundEngine.playTap();
+    if (!window.PublicKeyCredential) {
+      triggerError('Sensor sidik jari / Face ID tidak didukung di browser ini.');
+      return;
+    }
+
+    try {
+      // Buat tantangan dummy untuk autentikasi biometrik lokal WebAuthn
+      const challenge = new Uint8Array(32);
+      window.crypto.getRandomValues(challenge);
+      
+      const credential = await navigator.credentials.get({
+        publicKey: {
+          challenge,
+          timeout: 60000,
+          userVerification: 'preferred'
+        }
+      });
+
+      if (credential || !hasPin) {
+        soundEngine.playCashRegister();
+        onUnlock();
+      }
+    } catch {
+      // Jika biometrik ditolak / dibatalkan user, fallback ke input PIN biasa
+      triggerError('Autentikasi biometrik dibatalkan. Masukkan PIN Anda.');
+    }
+  };
 
   const handleNumpad = (digit: string) => {
     setErrorMessage('');
@@ -198,6 +234,18 @@ export const PinLockModal: React.FC<PinLockModalProps> = ({ onUnlock }) => {
               </button>
             ))}
           </div>
+
+          {/* Tombol Biometrik Fingerprint / Face ID (Nomor 13) */}
+          {hasPin && hasBiometrics && (
+            <button
+              type="button"
+              onClick={handleBiometricAuth}
+              className="brutal-btn w-full py-2.5 bg-[#38BDF8] text-[#121214] text-xs font-black uppercase tracking-wider gap-2 cursor-pointer shadow-[2px_2px_0px_#121214]"
+            >
+              <Fingerprint className="w-4 h-4 stroke-[2.5]" />
+              <span>Buka dengan Sidik Jari / Biometrik</span>
+            </button>
+          )}
 
           {!hasPin && isConfirmingStep && (
             <button

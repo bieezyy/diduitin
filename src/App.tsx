@@ -74,6 +74,14 @@ export function App() {
         setMonthlyBudget(budgetRecord.monthlyLimit);
       }
 
+      // Inisialisasi tema dark / light
+      const savedTheme = localStorage.getItem('diduitin_theme');
+      if (savedTheme === 'dark') {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+
       // First-time user onboarding detection
       const hasSeen = localStorage.getItem('diduitin_has_seen_onboarding');
       if (!hasSeen) {
@@ -146,6 +154,34 @@ export function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [wallets]);
+
+  // Auto-Lock Timer saat App di-minimize / blur (Nomor 14)
+  useEffect(() => {
+    let backgroundTimeout: ReturnType<typeof setTimeout> | null = null;
+
+    const handleVisibilityChange = () => {
+      const savedPin = localStorage.getItem('diduitin_user_pin');
+      if (!savedPin) return; // Jika belum pasang PIN, tidak perlu auto-lock
+
+      if (document.hidden) {
+        // Kunci otomatis setelah 1 menit di background
+        backgroundTimeout = setTimeout(() => {
+          setIsAppUnlocked(false);
+        }, 60000);
+      } else {
+        if (backgroundTimeout) {
+          clearTimeout(backgroundTimeout);
+          backgroundTimeout = null;
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (backgroundTimeout) clearTimeout(backgroundTimeout);
+    };
   }, []);
 
   // Hitung saldo: Jika filter dompet aktif, tampilkan saldo dompet itu, jika tidak akumulasi total
@@ -332,6 +368,7 @@ export function App() {
             isOpen={isSettingsOpen}
             onClose={() => setIsSettingsOpen(false)}
             currentBudget={monthlyBudget}
+            totalBalance={displayBalance}
             onOpenOnboarding={() => setIsOnboardingOpen(true)}
             onRefresh={loadData}
             mode={settingsMode}

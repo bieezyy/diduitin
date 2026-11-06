@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../db';
-import { X, Check, Coins, HelpCircle, MessageSquarePlus, Send } from 'lucide-react';
+import { X, Check, Coins, HelpCircle, MessageSquarePlus, Send, Moon, Sun, Volume2, VolumeX } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { triggerHaptic } from '../utils/haptics';
+import { soundEngine } from '../utils/soundFx';
 import { ActionModal, type AlertModalState } from './ActionModal';
 
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   currentBudget: number;
+  totalBalance?: number;
   onOpenOnboarding: () => void;
   onRefresh: () => void;
   mode?: 'budget' | 'settings';
@@ -18,6 +20,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   isOpen,
   onClose,
   currentBudget,
+  totalBalance,
   onOpenOnboarding,
   onRefresh,
   mode = 'settings'
@@ -26,6 +29,32 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [feedbackText, setFeedbackText] = useState('');
   const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
+    return document.documentElement.classList.contains('dark');
+  });
+  const [isSfxMuted, setIsSfxMuted] = useState<boolean>(() => {
+    return soundEngine.getMuted();
+  });
+
+  const toggleDarkMode = () => {
+    triggerHaptic('medium');
+    soundEngine.playTap();
+    const nextMode = !isDarkMode;
+    setIsDarkMode(nextMode);
+    if (nextMode) {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('diduitin_theme', 'dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('diduitin_theme', 'light');
+    }
+  };
+
+  const toggleSoundFx = () => {
+    triggerHaptic('light');
+    const muted = soundEngine.toggleMute();
+    setIsSfxMuted(muted);
+  };
 
   // State ActionModal Reusable
   const [actionModal, setActionModal] = useState<AlertModalState>({
@@ -61,6 +90,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     const now = new Date();
     const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     const budgetId = `b-${currentMonth}`;
+
+    // Validasi agar nominal limit tidak lebih besar dari Total Saldo (jika saldo tersedia dan > 0)
+    if (totalBalance !== undefined && totalBalance > 0 && numericVal > totalBalance) {
+      triggerHaptic('warning');
+      setActionModal({
+        isOpen: true,
+        type: 'warning',
+        title: 'Limit Melebihi Total Saldo',
+        message: `Limit budget (${new Intl.NumberFormat('id-ID').format(numericVal)}) tidak boleh lebih besar daripada Total Saldo Anda (${new Intl.NumberFormat('id-ID').format(totalBalance)}). Harap sesuaikan nominal limit.`,
+        confirmText: 'Sesuaikan',
+        onConfirm: () => setActionModal(prev => ({ ...prev, isOpen: false }))
+      });
+      return;
+    }
 
     await db.budgets.put({
       id: budgetId,
@@ -149,6 +192,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </span>
             <p className="text-[11px] text-neutral-500 leading-tight">
               Tentukan plafon pengeluaran bulan ini agar Boncos Meter dapat mengukur kesehatan finansialmu secara presisi.
+              {totalBalance !== undefined && totalBalance > 0 && (
+                <span className="block mt-1 font-bold text-[#121214]">
+                  Maksimal limit yang disarankan: Rp {new Intl.NumberFormat('id-ID').format(totalBalance)} (Total Saldo)
+                </span>
+              )}
             </p>
 
             {/* Input Nominal Group dengan Box Prefix Terpisah */}
@@ -208,9 +256,40 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </form>
         )}
 
-        {/* Mode 'settings': Panduan Singkat & Punya Masukan dan Saran */}
+        {/* Mode 'settings': Tema, Suara, Panduan Singkat & Punya Masukan dan Saran */}
         {mode === 'settings' && (
-          <div className="space-y-4">
+          <div className="space-y-3">
+            {/* Opsi Tampilan & Audio (Nomor 16 & 18) */}
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={toggleDarkMode}
+                className="p-3 border-2 border-[#121214] rounded-xl bg-white flex flex-col items-center justify-center gap-1.5 shadow-[2px_2px_0px_#121214] active:translate-x-0.5 active:translate-y-0.5 cursor-pointer"
+              >
+                {isDarkMode ? <Sun className="w-5 h-5 text-amber-500 stroke-[2.5]" /> : <Moon className="w-5 h-5 text-neutral-800 stroke-[2.5]" />}
+                <span className="text-[11px] font-black uppercase text-[#121214]">
+                  {isDarkMode ? 'Mode Terang' : 'Dark Mode'}
+                </span>
+                <span className="text-[9px] font-bold text-neutral-500">
+                  {isDarkMode ? 'Aktif: Gelap' : 'Aktif: Terang'}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={toggleSoundFx}
+                className="p-3 border-2 border-[#121214] rounded-xl bg-white flex flex-col items-center justify-center gap-1.5 shadow-[2px_2px_0px_#121214] active:translate-x-0.5 active:translate-y-0.5 cursor-pointer"
+              >
+                {isSfxMuted ? <VolumeX className="w-5 h-5 text-neutral-400 stroke-[2.5]" /> : <Volume2 className="w-5 h-5 text-emerald-600 stroke-[2.5]" />}
+                <span className="text-[11px] font-black uppercase text-[#121214]">
+                  {isSfxMuted ? 'Suara Hening' : 'Suara 8-Bit'}
+                </span>
+                <span className="text-[9px] font-bold text-neutral-500">
+                  {isSfxMuted ? 'Muted' : 'Retro SFX On'}
+                </span>
+              </button>
+            </div>
+
             {/* Info Pengenalan Apps */}
             <div className="p-3 border-2 border-[#121214] rounded-xl bg-white flex items-center justify-between shadow-[2px_2px_0px_#121214]">
               <div className="flex items-center gap-2">

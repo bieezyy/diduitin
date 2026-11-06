@@ -3,9 +3,10 @@ import type { Wallet } from '../types';
 import { db } from '../db';
 import {
   SUPPORTED_FINANCIAL_PROVIDERS,
-  type BankSyncRule
+  type BankSyncRule,
+  parseBankNotificationText
 } from '../services/bankSyncService';
-import { openFinancialApp } from '../services/bankSyncBridge';
+import { syncBankTransactionToDb, openFinancialApp } from '../services/bankSyncBridge';
 import {
   X,
   Zap,
@@ -16,8 +17,11 @@ import {
   ArrowUpRight,
   Sparkles,
   Link,
-  Unlink
+  Unlink,
+  MessageSquareCode,
+  Check
 } from 'lucide-react';
+import { soundEngine } from '../utils/soundFx';
 import confetti from 'canvas-confetti';
 import { triggerHaptic } from '../utils/haptics';
 
@@ -36,8 +40,10 @@ export const BankSyncModal: React.FC<BankSyncModalProps> = ({
   onRefresh,
   onNavigateToWallets
 }) => {
-  const [activeTab, setActiveTab] = useState<'providers' | 'schema'>('providers');
+  const [activeTab, setActiveTab] = useState<'providers' | 'testParser' | 'schema'>('providers');
   const [filterType, setFilterType] = useState<'all' | 'bank' | 'ewallet'>('all');
+  const [testNotificationText, setTestNotificationText] = useState('');
+  const [parseResult, setParseResult] = useState<ReturnType<typeof parseBankNotificationText> | null>(null);
   const [pairedProviders, setPairedProviders] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem('diduitin_paired_providers');
@@ -157,21 +163,30 @@ export const BankSyncModal: React.FC<BankSyncModalProps> = ({
           </button>
         </div>
 
-        {/* Tab Navigation (Bank & E-Wallet vs Skema Kerja) */}
-        <div className="grid grid-cols-2 gap-1 p-1 bg-neutral-100 border-2 border-[#121214] rounded-xl mb-3">
+        {/* Tab Navigation (Bank & E-Wallet vs Parser Notifikasi vs Skema Kerja) */}
+        <div className="grid grid-cols-3 gap-1 p-1 bg-neutral-100 border-2 border-[#121214] rounded-xl mb-3">
           <button
             type="button"
             onClick={() => setActiveTab('providers')}
-            className={`py-1.5 text-[11px] font-black uppercase rounded-lg transition-all cursor-pointer ${
+            className={`py-1.5 text-[10px] font-black uppercase rounded-lg transition-all cursor-pointer ${
               activeTab === 'providers' ? 'bg-[#121214] text-white shadow-[2px_2px_0px_#A3E635]' : 'text-neutral-600 hover:text-black'
             }`}
           >
-            Bank & E-Wallet ({SUPPORTED_FINANCIAL_PROVIDERS.length})
+            Bank & E-Wallet
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('testParser')}
+            className={`py-1.5 text-[10px] font-black uppercase rounded-lg transition-all cursor-pointer ${
+              activeTab === 'testParser' ? 'bg-[#121214] text-white shadow-[2px_2px_0px_#A3E635]' : 'text-neutral-600 hover:text-black'
+            }`}
+          >
+            Parser SMS / Notif
           </button>
           <button
             type="button"
             onClick={() => setActiveTab('schema')}
-            className={`py-1.5 text-[11px] font-black uppercase rounded-lg transition-all cursor-pointer ${
+            className={`py-1.5 text-[10px] font-black uppercase rounded-lg transition-all cursor-pointer ${
               activeTab === 'schema' ? 'bg-[#121214] text-white shadow-[2px_2px_0px_#A3E635]' : 'text-neutral-600 hover:text-black'
             }`}
           >
@@ -299,7 +314,112 @@ export const BankSyncModal: React.FC<BankSyncModalProps> = ({
           </div>
         )}
 
-        {/* Tab 2: Skema & Alur Kerja Teknis */}
+        {/* Tab 2: Parser Notifikasi SMS / Push Mockup (Nomor 9) */}
+        {activeTab === 'testParser' && (
+          <div className="space-y-3">
+            <div className="p-3 bg-[#FEF08A] border-2 border-[#121214] rounded-xl text-[#121214] shadow-[2px_2px_0px_#121214] space-y-1">
+              <span className="font-black text-xs uppercase flex items-center gap-1.5">
+                <MessageSquareCode className="w-4 h-4 text-neutral-800" />
+                <span>Simulasi Parser SMS & Push Notif Bank</span>
+              </span>
+              <p className="text-[11px] font-bold text-neutral-700 leading-tight">
+                Tempel teks SMS atau notifikasi transaksi bank/e-wallet Anda. Mesin cerdas diduitin akan mengekstrak nominal, jenis mutasi, dan nama merchant secara otomatis!
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <textarea
+                rows={3}
+                value={testNotificationText}
+                onChange={e => {
+                  setTestNotificationText(e.target.value);
+                  const parsed = parseBankNotificationText(e.target.value);
+                  setParseResult(parsed);
+                }}
+                placeholder="Contoh: Pembayaran QRIS BCA Rp 45.000 ke KOPI KENANGAN berhasil..."
+                className="brutal-input w-full text-xs font-bold bg-white"
+              />
+
+              <div className="flex gap-1.5 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const sample = 'BCA: Transaksi QRIS sebesar Rp 38.000 di FORE COFFEE pada 06/11 berhasil.';
+                    setTestNotificationText(sample);
+                    setParseResult(parseBankNotificationText(sample));
+                  }}
+                  className="px-2 py-1 bg-white hover:bg-neutral-100 border border-[#121214] rounded text-[10px] font-bold cursor-pointer"
+                >
+                  Contoh BCA
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const sample = 'Livin by Mandiri: Pembayaran debit Rp 150.000 ke SPBU PERTAMINA sukses.';
+                    setTestNotificationText(sample);
+                    setParseResult(parseBankNotificationText(sample));
+                  }}
+                  className="px-2 py-1 bg-white hover:bg-neutral-100 border border-[#121214] rounded text-[10px] font-bold cursor-pointer"
+                >
+                  Contoh Mandiri
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const sample = 'Kamu telah berhasil transfer saldo GoPay Rp 25.000 ke Sdr Rian.';
+                    setTestNotificationText(sample);
+                    setParseResult(parseBankNotificationText(sample));
+                  }}
+                  className="px-2 py-1 bg-white hover:bg-neutral-100 border border-[#121214] rounded text-[10px] font-bold cursor-pointer"
+                >
+                  Contoh GoPay
+                </button>
+              </div>
+
+              {parseResult && parseResult.amount > 0 && (
+                <div className="p-3 bg-[#F0FDF4] border-2 border-[#121214] rounded-xl shadow-[2px_2px_0px_#121214] space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-black uppercase text-emerald-800">
+                      Hasil Deteksi Cerdas:
+                    </span>
+                    <span className="brutal-badge text-[9px] bg-[#A3E635]">
+                      {parseResult.confidence}% Cocok
+                    </span>
+                  </div>
+                  <div className="text-xs font-bold space-y-1">
+                    <div>Bank / Provider: <strong className="text-[#121214] uppercase">{parseResult.providerName}</strong></div>
+                    <div>Nominal: <strong className="text-emerald-700 text-sm font-black">Rp {new Intl.NumberFormat('id-ID').format(parseResult.amount)}</strong></div>
+                    <div>Tipe: <strong className="uppercase">{parseResult.type === 'expense' ? 'Pengeluaran (Debet)' : 'Pemasukan (Kredit)'}</strong></div>
+                    {parseResult.recipientOrMerchant && (
+                      <div>Merchant / Tujuan: <strong>{parseResult.recipientOrMerchant}</strong></div>
+                    )}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const res = await syncBankTransactionToDb(parseResult, wallets);
+                      if (res.success) {
+                        soundEngine.playCashRegister();
+                        confetti({ particleCount: 30, spread: 50, origin: { y: 0.7 } });
+                        setTestNotificationText('');
+                        setParseResult(null);
+                        onRefresh();
+                        onClose();
+                      }
+                    }}
+                    className="brutal-btn w-full py-2 bg-[#A3E635] text-[#121214] text-xs font-black uppercase tracking-wider gap-1.5 cursor-pointer shadow-[2px_2px_0px_#121214]"
+                  >
+                    <Check className="w-3.5 h-3.5 stroke-[3]" />
+                    Simpan Otomatis ke Catatan
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Tab 3: Skema & Alur Kerja Teknis */}
         {activeTab === 'schema' && (
           <div className="space-y-3 text-xs leading-relaxed font-bold text-neutral-700">
             <div className="p-3 bg-[#DDD6FE] border-2 border-[#121214] rounded-xl text-[#121214] shadow-[2px_2px_0px_#121214]">

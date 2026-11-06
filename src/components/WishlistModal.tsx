@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import type { Wallet, WishlistTarget } from '../types';
 import { db } from '../db';
 import { formatRupiah } from '../constants/categories';
-import { X, Sparkles, Plus, Trash2, ExternalLink, Link2 } from 'lucide-react';
+import { X, Sparkles, Plus, Trash2, ExternalLink, Link2, Hourglass } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { ActionModal, type AlertModalState } from './ActionModal';
 
@@ -28,6 +28,7 @@ export const WishlistModal: React.FC<WishlistModalProps> = ({
   const [cemplungModal, setCemplungModal] = useState<WishlistTarget | null>(null);
   const [cemplungAmountStr, setCemplungAmountStr] = useState('');
   const [sourceWalletId, setSourceWalletId] = useState(wallets[0]?.id || '');
+  const [cooldownOption, setCooldownOption] = useState<number>(0); // 0, 24, atau 48 jam
 
   // Sinkronisasi sourceWalletId saat wallets berubah
   React.useEffect(() => {
@@ -65,18 +66,22 @@ export const WishlistModal: React.FC<WishlistModalProps> = ({
       formattedUrl = 'https://' + formattedUrl;
     }
 
+    const cooldownUntil = cooldownOption > 0 ? Date.now() + cooldownOption * 3600 * 1000 : undefined;
+
     await db.wishlists.add({
       id: `wish-${Date.now()}`,
       title: title.trim(),
       targetAmount: target,
       savedAmount: 0,
       itemUrl: formattedUrl || undefined,
+      cooldownUntil,
       createdAt: Date.now()
     });
 
     setTitle('');
     setTargetAmountStr('');
     setItemUrl('');
+    setCooldownOption(0);
     setIsAdding(false);
     onRefresh();
   };
@@ -199,6 +204,10 @@ export const WishlistModal: React.FC<WishlistModalProps> = ({
             wishlists.map(w => {
               const pct = Math.min(Math.round((w.savedAmount / w.targetAmount) * 100), 100);
               const isDone = w.savedAmount >= w.targetAmount;
+              const isCoolingDown = w.cooldownUntil && w.cooldownUntil > Date.now();
+              const remainingHours = isCoolingDown
+                ? Math.ceil((w.cooldownUntil! - Date.now()) / (3600 * 1000))
+                : 0;
 
               return (
                 <div
@@ -222,6 +231,12 @@ export const WishlistModal: React.FC<WishlistModalProps> = ({
                             <ExternalLink className="w-2.5 h-2.5" />
                             <span>Link</span>
                           </a>
+                        )}
+                        {isCoolingDown && (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded bg-[#FEF08A] text-[#121214] border border-[#121214] text-[9px] font-black uppercase">
+                            <Hourglass className="w-2.5 h-2.5 animate-spin" />
+                            <span>Cooldown {remainingHours} Jam</span>
+                          </span>
                         )}
                       </div>
                       <span className="text-[11px] font-bold text-neutral-600 block">
@@ -361,6 +376,40 @@ export const WishlistModal: React.FC<WishlistModalProps> = ({
                 className="brutal-input w-full text-xs"
               />
             </div>
+
+            {/* Cooldown Timer Option (Nomor 3) */}
+            <div className="p-2.5 bg-[#FEF08A] border border-[#121214] rounded-lg space-y-1.5">
+              <div className="flex items-center gap-1 text-[10px] font-black uppercase text-[#121214]">
+                <Hourglass className="w-3.5 h-3.5 text-neutral-800" />
+                <span>Cooldown Nahan Diri (Anti-FOMO):</span>
+              </div>
+              <div className="grid grid-cols-3 gap-1.5">
+                {[
+                  { label: 'Langsung', val: 0 },
+                  { label: '24 Jam', val: 24 },
+                  { label: '48 Jam', val: 48 }
+                ].map(opt => (
+                  <button
+                    key={opt.val}
+                    type="button"
+                    onClick={() => setCooldownOption(opt.val)}
+                    className={`py-1 text-[10px] font-black uppercase rounded border border-[#121214] transition-all cursor-pointer ${
+                      cooldownOption === opt.val
+                        ? 'bg-[#121214] text-white shadow-[1px_1px_0px_#A3E635]'
+                        : 'bg-white text-neutral-800 hover:bg-neutral-100'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              <span className="text-[9px] font-bold text-neutral-700 block">
+                {cooldownOption > 0
+                  ? `Impian ini akan dikunci selama ${cooldownOption} jam untuk mencegah pembelian impulsif.`
+                  : 'Bisa langsung dibeli tanpa waktu tunggu.'}
+              </span>
+            </div>
+
             <div className="flex gap-2 justify-end pt-1">
               <button
                 type="button"

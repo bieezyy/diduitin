@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import type { Wallet, Subscription } from '../types';
 import { db } from '../db';
 import { formatRupiah } from '../constants/categories';
-import { X, Plus, Trash2, CheckCircle, AlertCircle, RefreshCw, CreditCard } from 'lucide-react';
+import { X, Plus, Trash2, CheckCircle, AlertCircle, RefreshCw, CreditCard, Bell, BellRing } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { ActionModal, type AlertModalState } from './ActionModal';
 
@@ -177,6 +177,29 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
 
   const walletMap = new Map(wallets.map(w => [w.id, w]));
 
+  // Logika Reminder H-7, H-3, H-1 jatuh tempo langganan bulan berjalan
+  const todayDate = new Date().getDate();
+  const getSubReminder = (billingDay: number) => {
+    let diffDays = billingDay - todayDate;
+    // Jika tanggal tagihan sudah lewat di bulan ini, hitung menuju bulan depan
+    if (diffDays < 0) {
+      const now = new Date();
+      const daysInCurrentMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+      diffDays = (daysInCurrentMonth - todayDate) + billingDay;
+    }
+
+    if (diffDays === 0) {
+      return { text: 'Hari Ini Tagihan!', color: 'bg-[#FB7185] text-[#121214] border-[#121214]', urgent: true };
+    } else if (diffDays === 1) {
+      return { text: 'H-1 Jatuh Tempo!', color: 'bg-[#FB7185] text-[#121214] border-[#121214]', urgent: true };
+    } else if (diffDays <= 3) {
+      return { text: `H-${diffDays} Segera Bayar!`, color: 'bg-[#FDE047] text-[#121214] border-[#121214]', urgent: true };
+    } else if (diffDays <= 7) {
+      return { text: `H-${diffDays} Jatuh Tempo`, color: 'bg-[#FED7AA] text-[#121214] border-[#121214]', urgent: false };
+    }
+    return null;
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
       <div className="w-full max-w-md bg-white border-2 border-[#121214] rounded-2xl shadow-[6px_6px_0px_#121214] p-5 max-h-[90vh] overflow-y-auto">
@@ -217,6 +240,16 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
           </span>
         </div>
 
+        {/* Banner Peringatan Jatuh Tempo Mendekat */}
+        {subscriptions.some(s => s.isActive && getSubReminder(s.billingDay)?.urgent) && (
+          <div className="p-2.5 bg-[#FFF1F2] border-2 border-[#121214] rounded-xl mb-3 flex items-center gap-2 shadow-[2px_2px_0px_#121214]">
+            <BellRing className="w-4 h-4 text-rose-600 shrink-0 stroke-[2.5]" />
+            <p className="text-[11px] font-black text-[#121214] leading-tight">
+              Ada tagihan langganan yang mendekati jatuh tempo (H-7 s/d H-1)! Siapkan saldo dompet Anda.
+            </p>
+          </div>
+        )}
+
         {/* List Subscriptions */}
         <div className="space-y-2 mb-4">
           {subscriptions.length === 0 ? (
@@ -226,6 +259,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
           ) : (
             subscriptions.map(sub => {
               const defaultWallet = walletMap.get(sub.walletId);
+              const reminder = sub.isActive ? getSubReminder(sub.billingDay) : null;
               return (
                 <div
                   key={sub.id}
@@ -247,9 +281,17 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
                       )}
                     </button>
                     <div>
-                      <h3 className={`text-xs font-black ${sub.isActive ? 'text-[#121214]' : 'text-neutral-500 line-through'}`}>
-                        {sub.name}
-                      </h3>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <h3 className={`text-xs font-black ${sub.isActive ? 'text-[#121214]' : 'text-neutral-500 line-through'}`}>
+                          {sub.name}
+                        </h3>
+                        {reminder && (
+                          <span className={`px-1.5 py-0.2 rounded border text-[9px] font-black uppercase flex items-center gap-0.5 ${reminder.color}`}>
+                            {reminder.urgent ? <BellRing className="w-2.5 h-2.5 stroke-[3]" /> : <Bell className="w-2.5 h-2.5" />}
+                            {reminder.text}
+                          </span>
+                        )}
+                      </div>
                       <div className="text-[10px] font-bold text-neutral-500 flex items-center gap-1.5 mt-0.5">
                         <span className="px-1.5 py-0.2 rounded bg-neutral-200 text-black">
                           Tgl {sub.billingDay}

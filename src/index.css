@@ -7,6 +7,25 @@
     --border-color: #121214;
   }
 
+  html.dark {
+    --canvas: #09090b;
+    --ink: #f4f4f5;
+    --border-color: #27272a;
+    color-scheme: dark;
+  }
+
+  html.dark body {
+    background-color: #09090b;
+    color: #f4f4f5;
+  }
+
+  html.dark .brutal-card {
+    background-color: #18181b;
+    color: #f4f4f5;
+    border-color: #3f3f46;
+    box-shadow: 3px 3px 0px #A3E635;
+  }
+
   body {
     background-color: var(--canvas);
     color: var(--ink);

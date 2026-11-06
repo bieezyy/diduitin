@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import type { Wallet, Transaction, DebtMemo } from '../types';
 import { formatRupiah } from '../constants/categories';
-import { Flame, Plus, Settings, Sparkles, BookOpen, Sun, Frown, RefreshCw, Eye, EyeOff, Shield, Clock, RotateCw } from 'lucide-react';
+import { Flame, Plus, Settings, Sparkles, BookOpen, Sun, Frown, RefreshCw, Eye, EyeOff, Shield, Clock, RotateCw, X, AlertTriangle, PieChart, ShieldCheck, HeartHandshake, TrendingUp } from 'lucide-react';
 import { getGenzGreeting, DAILY_WISDOMS, getJakartaTimeContext } from '../utils/genzFeedback';
 
 interface RealitiCheckProps {
@@ -41,6 +41,16 @@ export const RealitiCheck: React.FC<RealitiCheckProps> = ({
 }) => {
   // State Mode Sensor Saldo (Anti-Kepo saat di tempat umum)
   const [isBalanceHidden, setIsBalanceHidden] = useState(false);
+
+  // State greeting hanya muncul sekali
+  const [hasDismissedGreeting, setHasDismissedGreeting] = useState<boolean>(() => {
+    return localStorage.getItem('diduitin_greeting_dismissed') === 'true';
+  });
+
+  const handleDismissGreeting = () => {
+    localStorage.setItem('diduitin_greeting_dismissed', 'true');
+    setHasDismissedGreeting(true);
+  };
 
   // Real-time clock Jakarta (WIB)
   const [nowDate, setNowDate] = useState<Date>(() => new Date());
@@ -83,9 +93,11 @@ export const RealitiCheck: React.FC<RealitiCheckProps> = ({
     .reduce((sum, d) => sum + d.amount, 0);
   const netWorth = totalBalance + totalUnsettledLent - totalUnsettledBorrowed;
 
-  const burnPercent = monthlyBudget > 0 ? Math.min(Math.round((monthlyExpense / monthlyBudget) * 100), 100) : 0;
-  const remainingBudget = Math.max(monthlyBudget - monthlyExpense, 0);
-  const remainingPercent = monthlyBudget > 0 ? (remainingBudget / monthlyBudget) * 100 : 0;
+  // Pastikan plafon limit acuan Boncos Meter tidak melebihi Total Saldo jika saldo ada
+  const effectiveBudget = (totalBalance > 0 && monthlyBudget > totalBalance) ? totalBalance : monthlyBudget;
+  const burnPercent = effectiveBudget > 0 ? Math.min(Math.round((monthlyExpense / effectiveBudget) * 100), 100) : 0;
+  const remainingBudget = Math.max(effectiveBudget - monthlyExpense, 0);
+  const remainingPercent = effectiveBudget > 0 ? (remainingBudget / effectiveBudget) * 100 : 0;
 
   // Hitung sisa hari dalam bulan berjalan untuk Jatah Harian (Daily Allowance)
   const now = new Date();
@@ -122,6 +134,49 @@ export const RealitiCheck: React.FC<RealitiCheckProps> = ({
 
   const totalExpenseSum = monthExpenses.reduce((sum, tx) => sum + tx.amount, 0);
 
+  // Perhitungan Alokasi 50/30/20 Otomatis (Nomor 10)
+  const needExpensesSum = monthExpenses
+    .filter(tx => tx.nature === 'need' || (!tx.nature && tx.category !== 'fomo'))
+    .reduce((sum, tx) => sum + tx.amount, 0);
+  const wantExpensesSum = monthExpenses
+    .filter(tx => tx.nature === 'want' || tx.category === 'fomo')
+    .reduce((sum, tx) => sum + tx.amount, 0);
+  const totalNeedWant = needExpensesSum + wantExpensesSum;
+  const needRatio = totalNeedWant > 0 ? Math.round((needExpensesSum / totalNeedWant) * 100) : 50;
+  const wantRatio = totalNeedWant > 0 ? 100 - needRatio : 50;
+
+  // Analisis Bocor Halus Mingguan / Weekly Leak Alert (Nomor 8: transaksi kecil <= Rp 30.000 dalam 7 hari terakhir)
+  const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  const leakTransactions = transactions.filter(
+    tx => tx.type === 'expense' && tx.timestamp >= sevenDaysAgo && tx.amount <= 30000
+  );
+  const totalLeakAmount = leakTransactions.reduce((sum, tx) => sum + tx.amount, 0);
+
+  // Kalkulasi Streak Harian & Gamifikasi Disiplin (Nomor 7)
+  const uniqueExpenseDays = Array.from(
+    new Set(
+      transactions
+        .filter(tx => tx.type === 'expense' || tx.type === 'income')
+        .map(tx => tx.date)
+    )
+  ).sort().reverse();
+
+  let streakDays = 0;
+  const todayDateStr = new Date().toISOString().split('T')[0];
+  const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+  if (uniqueExpenseDays.length > 0 && (uniqueExpenseDays[0] === todayDateStr || uniqueExpenseDays[0] === yesterday)) {
+    let checkDate = new Date(uniqueExpenseDays[0] === todayDateStr ? todayDateStr : yesterday);
+    for (let i = 0; i < uniqueExpenseDays.length; i++) {
+      const expectedStr = checkDate.toISOString().split('T')[0];
+      if (uniqueExpenseDays.includes(expectedStr)) {
+        streakDays++;
+        checkDate = new Date(checkDate.getTime() - 86400000);
+      } else {
+        break;
+      }
+    }
+  }
+
   // Dapatkan sapaan waktu Jakarta WIB
   const genzGreeting = getGenzGreeting();
   const timeContext = getJakartaTimeContext();
@@ -137,6 +192,27 @@ export const RealitiCheck: React.FC<RealitiCheckProps> = ({
       return (current + 1) % todayWisdomList.length;
     });
   };
+
+  // Kalkulator Otomatis Dana Darurat & Zakat Maal (Nomor 5)
+  // Rata-rata pengeluaran per bulan (gunakan pengeluaran bulan berjalan atau fallback budget)
+  const burnRateRef = monthlyExpense > 0 ? monthlyExpense : (monthlyBudget > 0 ? monthlyBudget : 2000000);
+  const emergencyFundMonths = (totalBalance / burnRateRef).toFixed(1);
+
+  // Zakat Maal: Nisab emas 85 gram (~Rp 110.000.000)
+  const nisabGoldValue = 110000000;
+  const isWajibZakat = totalBalance >= nisabGoldValue;
+  const zakatMaalAmount = isWajibZakat ? Math.round(totalBalance * 0.025) : 0;
+
+  // Analisis Tren Pengeluaran Mingguan (7 Hari Terakhir vs 7 Hari Sebelumnya - Nomor 11)
+  const fourteenDaysAgo = Date.now() - 14 * 24 * 3600 * 1000;
+  const currentWeekExpenses = transactions.filter(
+    tx => tx.type === 'expense' && tx.timestamp >= sevenDaysAgo
+  );
+  const prevWeekExpenses = transactions.filter(
+    tx => tx.type === 'expense' && tx.timestamp >= fourteenDaysAgo && tx.timestamp < sevenDaysAgo
+  );
+  const sumCurrentWeek = currentWeekExpenses.reduce((sum, tx) => sum + tx.amount, 0);
+  const sumPrevWeek = prevWeekExpenses.reduce((sum, tx) => sum + tx.amount, 0);
 
   // Status Badge sisa budget
   let statusBadge = {
@@ -169,6 +245,31 @@ export const RealitiCheck: React.FC<RealitiCheckProps> = ({
 
   return (
     <div className="space-y-4">
+      {/* 0. Greeting Banner Personal (Hanya muncul sekali, jika ditutup tersimpan permanen) */}
+      {!hasDismissedGreeting && (
+        <div className="p-3 bg-gradient-to-r from-[#FEF08A] to-[#FDE047] border-2 border-[#121214] rounded-2xl shadow-[3px_3px_0px_#121214] flex items-center justify-between gap-2 animate-in fade-in duration-300">
+          <div className="flex items-center gap-2">
+            <span className="text-xl select-none">👋</span>
+            <div>
+              <h3 className="text-xs font-black uppercase text-[#121214] tracking-tight">
+                {genzGreeting.greeting}!
+              </h3>
+              <p className="text-[10px] font-bold text-neutral-800 leading-tight">
+                {genzGreeting.subGreeting}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={handleDismissGreeting}
+            className="p-1 rounded-md border border-[#121214] bg-white hover:bg-neutral-100 text-[#121214] cursor-pointer shrink-0"
+            title="Tutup Greeting"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
       {/* 1. Welcoming Banner Dinamis Waktu Jakarta WIB dengan Jam Analog & Digital */}
       <div className="brutal-card p-4 bg-white border-2 border-[#121214] shadow-[3px_3px_0px_#121214] space-y-3">
         <div className="flex items-center justify-between">
@@ -176,6 +277,15 @@ export const RealitiCheck: React.FC<RealitiCheckProps> = ({
             Waktu Real-time Jakarta
           </span>
           <div className="flex items-center gap-1.5">
+            {/* Gamifikasi Streak Badge (Nomor 7) */}
+            <div
+              className="brutal-badge text-[9px] bg-[#FEF08A] text-[#121214] flex items-center gap-1 shadow-[1.5px_1.5px_0px_#121214]"
+              title={`Streak ${streakDays} hari berturut-turut mencatat keuangan`}
+            >
+              <Flame className="w-3 h-3 text-orange-600 fill-orange-500" />
+              <span>{streakDays} Hari Streak!</span>
+            </div>
+
             {onOpenWrappedModal && (
               <button
                 type="button"
@@ -482,6 +592,68 @@ export const RealitiCheck: React.FC<RealitiCheckProps> = ({
         </div>
       )}
 
+      {/* Visualisasi Budgeting 50/30/20 (Nomor 10) */}
+      <div className="brutal-card p-3.5 bg-white space-y-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            <PieChart className="w-3.5 h-3.5 text-indigo-600" />
+            <span className="text-xs font-black uppercase text-[#121214]">
+              Rasio Kebutuhan vs Keinginan
+            </span>
+          </div>
+          <span className="text-[10px] font-black uppercase bg-[#DDD6FE] px-1.5 py-0.5 rounded border border-[#121214]">
+            Rule 50/30/20
+          </span>
+        </div>
+
+        {/* Bar Proporsi */}
+        <div className="w-full h-4 bg-neutral-100 border-2 border-[#121214] rounded-lg overflow-hidden flex">
+          <div
+            className="bg-[#A3E635] h-full transition-all border-r border-[#121214]"
+            style={{ width: `${needRatio}%` }}
+            title={`Kebutuhan: ${needRatio}%`}
+          />
+          <div
+            className="bg-[#FB7185] h-full transition-all"
+            style={{ width: `${wantRatio}%` }}
+            title={`Keinginan/FOMO: ${wantRatio}%`}
+          />
+        </div>
+
+        <div className="flex justify-between text-[10px] font-bold text-neutral-600">
+          <span className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-full bg-[#A3E635] border border-[#121214]" />
+            Need: <strong className="text-[#121214]">{formatRupiah(needExpensesSum)}</strong> ({needRatio}%)
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-full bg-[#FB7185] border border-[#121214]" />
+            FOMO: <strong className="text-[#121214]">{formatRupiah(wantExpensesSum)}</strong> ({wantRatio}%)
+          </span>
+        </div>
+      </div>
+
+      {/* Deteksi Kebocoran Halus Mingguan / Weekly Leak Alert (Nomor 8) */}
+      {totalLeakAmount > 0 && (
+        <div className="p-3 bg-[#FEF08A] border-2 border-[#121214] rounded-xl shadow-[2px_2px_0px_#121214] flex items-start gap-2.5">
+          <div className="w-7 h-7 rounded-lg bg-white border border-[#121214] flex items-center justify-center shrink-0 shadow-[1px_1px_0px_#121214]">
+            <AlertTriangle className="w-4 h-4 text-amber-700 stroke-[2.5]" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs font-black uppercase text-[#121214]">
+                Radar Bocor Halus 7 Hari:
+              </h4>
+              <span className="text-[10px] font-black text-rose-700">
+                {leakTransactions.length}x transaksi
+              </span>
+            </div>
+            <p className="text-[11px] font-bold text-neutral-800 leading-tight mt-0.5">
+              Uang receh (≤ Rp 30.000) minggu ini terkuras <strong className="text-rose-700 font-black">{formatRupiah(totalLeakAmount)}</strong>. Cek kembali parkir & kudapan!
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Kartu Boncos Bar (Burn Rate Meter) */}
       <div className="brutal-card p-4 bg-[#FFFFFF]">
         <div className="flex items-center justify-between mb-2">
@@ -515,7 +687,7 @@ export const RealitiCheck: React.FC<RealitiCheckProps> = ({
 
         <div className="flex justify-between items-center mt-2 text-[11px] font-bold text-neutral-600">
           <span>
-            {monthlyBudget > 0 ? (
+            {effectiveBudget > 0 ? (
               <>
                 Sisa Budget: <strong className="text-[#121214] font-black">{formatRupiah(remainingBudget)}</strong> ({Math.round(remainingPercent)}%)
               </>
@@ -524,7 +696,65 @@ export const RealitiCheck: React.FC<RealitiCheckProps> = ({
             )}
           </span>
           <span>
-            Limit: <strong className="text-[#121214] font-black">{formatRupiah(monthlyBudget)}</strong>
+            Limit: <strong className="text-[#121214] font-black">{formatRupiah(effectiveBudget)}</strong>
+            {monthlyBudget > effectiveBudget && (
+              <span className="text-[9px] text-amber-600 font-bold block">(dibatasi total saldo)</span>
+            )}
+          </span>
+        </div>
+      </div>
+
+      {/* Grafik Visual Tren Pengeluaran Mingguan (Nomor 11) */}
+      <div className="brutal-card p-3.5 bg-white space-y-2.5">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            <TrendingUp className="w-4 h-4 text-emerald-700" />
+            <span className="text-xs font-black uppercase text-[#121214]">
+              Tren Belanja 7 Hari vs Pekan Lalu
+            </span>
+          </div>
+          <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded border border-[#121214] ${
+            sumCurrentWeek > sumPrevWeek ? 'bg-[#FB7185] text-[#121214]' : 'bg-[#A3E635] text-[#121214]'
+          }`}>
+            {sumCurrentWeek > sumPrevWeek ? 'Boros 📈' : 'Hemat 📉'}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 text-center">
+          <div className="p-2 bg-[#F9F9FB] border border-[#121214] rounded-xl shadow-[1.5px_1.5px_0px_#121214]">
+            <span className="text-[9px] font-black uppercase text-neutral-400 block">7 Hari Ini:</span>
+            <span className="text-sm font-black text-[#121214] block mt-0.5">{formatRupiah(sumCurrentWeek)}</span>
+          </div>
+          <div className="p-2 bg-[#F9F9FB] border border-[#121214] rounded-xl shadow-[1.5px_1.5px_0px_#121214]">
+            <span className="text-[9px] font-black uppercase text-neutral-400 block">7 Hari Sebelumnya:</span>
+            <span className="text-sm font-black text-neutral-600 block mt-0.5">{formatRupiah(sumPrevWeek)}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Kalkulator Dana Darurat & Zakat Maal (Nomor 5) */}
+      <div className="grid grid-cols-2 gap-2">
+        <div className="brutal-card p-3 bg-white space-y-1">
+          <div className="flex items-center gap-1 text-[10px] font-black uppercase text-indigo-700">
+            <ShieldCheck className="w-3.5 h-3.5" /> Dana Darurat
+          </div>
+          <div className="text-base font-black text-[#121214]">
+            {emergencyFundMonths} <span className="text-xs font-bold text-neutral-500">Bulan</span>
+          </div>
+          <span className="text-[9px] font-bold text-neutral-500 block leading-tight">
+            Kekuatan bertahan hidup dari total saldo riil
+          </span>
+        </div>
+
+        <div className="brutal-card p-3 bg-white space-y-1">
+          <div className="flex items-center gap-1 text-[10px] font-black uppercase text-amber-700">
+            <HeartHandshake className="w-3.5 h-3.5" /> Zakat Maal (2.5%)
+          </div>
+          <div className="text-base font-black text-[#121214]">
+            {isWajibZakat ? formatRupiah(zakatMaalAmount) : 'Rp 0'}
+          </div>
+          <span className="text-[9px] font-bold text-neutral-500 block leading-tight">
+            {isWajibZakat ? 'Wajib dikeluarkan (Capai nisab emas)' : 'Belum mencapai batas nisab emas'}
           </span>
         </div>
       </div>

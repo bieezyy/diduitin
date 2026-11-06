@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { formatRupiah } from '../constants/categories';
-import { X, Sparkles, Flame, Smile, Frown, Share2 } from 'lucide-react';
+import { X, Sparkles, Flame, Smile, Frown, Share2, Download } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import html2canvas from 'html2canvas';
 import { ActionModal, type AlertModalState } from './ActionModal';
 
 interface WrappedCardModalProps {
@@ -25,6 +26,8 @@ export const WrappedCardModal: React.FC<WrappedCardModalProps> = ({
   regretExpense,
   topCategory
 }) => {
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [isExporting, setIsExporting] = useState(false);
   const [actionModal, setActionModal] = useState<AlertModalState>({
     isOpen: false,
     title: '',
@@ -69,30 +72,116 @@ export const WrappedCardModal: React.FC<WrappedCardModalProps> = ({
     };
   }
 
-  const handleShareText = () => {
-    const text = `✨ Finansial Recap ${currentMonthName} (via diduitin):\n` +
+  const getShareText = () => {
+    return `✨ Finansial Recap ${currentMonthName} (via diduitin):\n` +
       `🏆 Persona: ${persona.title}\n` +
       `🔥 Boncos Meter: ${burnRate}%\n` +
       `🛒 Kebutuhan: ${needPercent}% | FOMO: ${wantPercent}%\n` +
       (topCategory ? `☕ Kebocoran Terbesar: #${topCategory.name} (${formatRupiah(topCategory.amount)})\n` : '') +
       `Catat duitmu di diduitin! 🚀`;
+  };
 
+  // Simpan Rekap Bulanan sebagai gambar JPG
+  const handleSaveJPG = async () => {
+    if (!cardRef.current || isExporting) return;
+    try {
+      setIsExporting(true);
+      const canvas = await html2canvas(cardRef.current, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#FFFFFF'
+      });
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
+      const link = document.createElement('a');
+      link.download = `rekap-bulanan-${currentMonthName.toLowerCase().replace(/\s+/g, '-')}.jpg`;
+      link.href = dataUrl;
+      link.click();
+
+      confetti({ particleCount: 35, spread: 60, origin: { y: 0.7 } });
+      setActionModal({
+        isOpen: true,
+        type: 'success',
+        title: 'Rekap Berhasil Disimpan!',
+        message: 'Gambar Rekap Bulanan (JPG) telah berhasil diunduh ke perangkat Anda.',
+        confirmText: 'Mantap',
+        onConfirm: () => setActionModal(prev => ({ ...prev, isOpen: false }))
+      });
+    } catch (err) {
+      console.error('Gagal generate JPG:', err);
+      setActionModal({
+        isOpen: true,
+        type: 'danger',
+        title: 'Gagal Menyimpan Rekap',
+        message: 'Terjadi kendala saat membuat gambar JPG. Silakan coba lagi.',
+        confirmText: 'Tutup',
+        onConfirm: () => setActionModal(prev => ({ ...prev, isOpen: false }))
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  // Bagikan Rekap Bulanan ke platform lain (WhatsApp, Medsos, Web Share API + fallback)
+  const handleShareText = async () => {
+    const text = getShareText();
+
+    // Coba gunakan Web Share API beserta file image jika didukung
     if (navigator.share) {
-      navigator.share({
-        title: `Finansial Recap ${currentMonthName}`,
-        text
-      }).catch(() => {});
-    } else {
-      navigator.clipboard.writeText(text);
+      try {
+        let fileToShare: File | null = null;
+        if (cardRef.current) {
+          try {
+            const canvas = await html2canvas(cardRef.current, {
+              scale: 1.5,
+              useCORS: true,
+              backgroundColor: '#FFFFFF'
+            });
+            const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.9));
+            if (blob) {
+              fileToShare = new File([blob], `rekap-${currentMonthName.replace(/\s+/g, '-')}.jpg`, { type: 'image/jpeg' });
+            }
+          } catch {
+            // Abaikan error file, share teks saja
+          }
+        }
+
+        const sharePayload: ShareData = {
+          title: `Finansial Recap ${currentMonthName}`,
+          text
+        };
+
+        if (fileToShare && navigator.canShare && navigator.canShare({ files: [fileToShare] })) {
+          sharePayload.files = [fileToShare];
+        }
+
+        await navigator.share(sharePayload);
+        return;
+      } catch (err: unknown) {
+        if ((err as Error)?.name === 'AbortError') return;
+      }
+    }
+
+    // Fallback jika Web Share API tidak tersedia / dibatalkan: copy text & beri opsi direct WhatsApp
+    try {
+      await navigator.clipboard.writeText(text);
       confetti({ particleCount: 30, spread: 50, origin: { y: 0.7 } });
       setActionModal({
         isOpen: true,
         type: 'success',
-        title: 'Berhasil Disalin!',
-        message: 'Teks ringkasan berhasil disalin! Siap dipost di medsos atau status.',
-        confirmText: 'Sip, Mantap',
-        onConfirm: () => setActionModal(prev => ({ ...prev, isOpen: false }))
+        title: 'Teks Rekap Disalin!',
+        message: 'Ringkasan sudah disalin. Mau langsung kirim ke WhatsApp sekarang?',
+        confirmText: 'Buka WhatsApp',
+        cancelText: 'Tutup',
+        onConfirm: () => {
+          setActionModal(prev => ({ ...prev, isOpen: false }));
+          const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
+          window.open(waUrl, '_blank');
+        },
+        onCancel: () => setActionModal(prev => ({ ...prev, isOpen: false }))
       });
+    } catch {
+      const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
+      window.open(waUrl, '_blank');
     }
   };
 
@@ -115,8 +204,8 @@ export const WrappedCardModal: React.FC<WrappedCardModalProps> = ({
           </button>
         </div>
 
-        {/* Kartu Visual Spotify-Wrapped Style */}
-        <div className="p-5 space-y-4 bg-gradient-to-b from-[#F9F9FB] to-white">
+        {/* Konten Rekap Utama yang Ditangkap untuk JPG & Dibagikan */}
+        <div ref={cardRef} className="p-5 space-y-4 bg-gradient-to-b from-[#F9F9FB] to-white">
           <div className="text-center">
             <span className="text-[10px] font-black uppercase text-neutral-500 tracking-widest block">
               REKAP FINANSIAL BULAN INI
@@ -174,11 +263,32 @@ export const WrappedCardModal: React.FC<WrappedCardModalProps> = ({
             </div>
           </div>
 
-          {/* Tombol Bagikan */}
+          {/* Watermark diduitin */}
+          <div className="text-center pt-1 border-t border-dashed border-neutral-200">
+            <span className="text-[9px] font-black text-neutral-400 uppercase tracking-wider">
+              diduitin • Catatan Duit Bersih & Anti Boncos
+            </span>
+          </div>
+        </div>
+
+        {/* Action Buttons Section */}
+        <div className="p-4 pt-0 space-y-2 bg-white">
+          {/* Tombol Simpan Rekap Bulanan (JPG) di atas tombol Bagikan */}
+          <button
+            type="button"
+            onClick={handleSaveJPG}
+            disabled={isExporting}
+            className="brutal-btn w-full py-2.5 bg-[#FDE047] text-[#121214] text-xs uppercase gap-2 cursor-pointer shadow-[3px_3px_0px_#121214] disabled:opacity-50"
+          >
+            <Download className="w-4 h-4 stroke-[2.5]" />
+            {isExporting ? 'Membuat JPG...' : 'Simpan Rekap Bulanan (JPG)'}
+          </button>
+
+          {/* Tombol Bagikan Rekap Bulanan */}
           <button
             type="button"
             onClick={handleShareText}
-            className="brutal-btn w-full py-3 bg-[#A3E635] text-[#121214] text-xs uppercase gap-2 cursor-pointer shadow-[3px_3px_0px_#121214]"
+            className="brutal-btn w-full py-2.5 bg-[#A3E635] text-[#121214] text-xs uppercase gap-2 cursor-pointer shadow-[3px_3px_0px_#121214]"
           >
             <Share2 className="w-4 h-4 stroke-[2.5]" />
             Bagikan Rekap Bulanan

@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../db';
 import type { Wallet, Transaction, TransactionType, SpendingNature, SpendingMood } from '../types';
-import { ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Check, X, Delete, Smile, Meh, Frown, Camera } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Check, X, Delete, Smile, Meh, Frown, Camera, Image as ImageIcon, Sparkles, Clock } from 'lucide-react';
 import { compressReceiptImage } from '../utils/imageCompressor';
 import { triggerHaptic } from '../utils/haptics';
+import { soundEngine } from '../utils/soundFx';
+import { scanReceiptClientSide } from '../utils/ocrScanner';
 import confetti from 'canvas-confetti';
 import { ActionModal, type AlertModalState } from './ActionModal';
 
@@ -34,7 +36,16 @@ export const QuickEntryModal: React.FC<QuickEntryModalProps> = ({
   const [mood, setMood] = useState<SpendingMood>('worth');
   const [receiptImage, setReceiptImage] = useState<string | null>(null);
   const [isCompressing, setIsCompressing] = useState(false);
+  const [isScanningOCR, setIsScanningOCR] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [hourlyWage, setHourlyWage] = useState<number>(0);
+
+  useEffect(() => {
+    const savedWage = localStorage.getItem('diduitin_hourly_wage');
+    if (savedWage) {
+      setHourlyWage(parseInt(savedWage, 10) || 0);
+    }
+  }, []);
 
   // State ActionModal Reusable
   const [actionModal, setActionModal] = useState<AlertModalState>({
@@ -80,6 +91,64 @@ export const QuickEntryModal: React.FC<QuickEntryModalProps> = ({
     }
   }, [isOpen, editTransaction, wallets, activeFilterWalletId]);
 
+  const evaluateMathExpression = () => {
+    if (!amountStr) return;
+    try {
+      // Hanya izinkan angka, +, -
+      const sanitized = amountStr.replace(/[^0-9+-]/g, '');
+      if (!sanitized) return;
+      // Hitung penjumlahan & pengurangan
+      const tokens = sanitized.match(/([+-]?\d+)/g);
+      if (tokens) {
+        const total = tokens.reduce((acc, t) => acc + parseInt(t, 10), 0);
+        if (!isNaN(total)) {
+          setAmountStr(Math.max(0, total).toString());
+          soundEngine.playTap();
+          triggerHaptic('medium');
+        }
+      }
+    } catch {
+      // Ignore
+    }
+  };
+
+  const handleNumpadClick = (val: string) => {
+    triggerHaptic('light');
+    soundEngine.playTap();
+    if (val === 'C') {
+      setAmountStr('');
+      return;
+    }
+    if (val === 'DEL') {
+      setAmountStr(prev => (prev.length > 1 ? prev.slice(0, -1) : ''));
+      return;
+    }
+    if (val === '000') {
+      if (amountStr && amountStr !== '0' && amountStr.length <= 8) {
+        setAmountStr(prev => prev + '000');
+      }
+      return;
+    }
+    if (val === '+' || val === '-') {
+      // Kalkulator cepat ekspresi (+ / -)
+      if (!amountStr) return;
+      const lastChar = amountStr.slice(-1);
+      if (lastChar === '+' || lastChar === '-') {
+        setAmountStr(prev => prev.slice(0, -1) + val);
+      } else {
+        setAmountStr(prev => prev + val);
+      }
+      return;
+    }
+    if (val === '=') {
+      // Evaluasi kalkulator cepat
+      evaluateMathExpression();
+      return;
+    }
+    if (amountStr.length >= 14) return;
+    setAmountStr(prev => (!prev || prev === '0' ? val : prev + val));
+  };
+
   // Keyboard Support untuk Angka dan Backspace
   useEffect(() => {
     if (!isOpen) return;
@@ -104,29 +173,9 @@ export const QuickEntryModal: React.FC<QuickEntryModalProps> = ({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen]);
+  }, [isOpen, amountStr]);
 
   if (!isOpen) return null;
-
-  const handleNumpadClick = (val: string) => {
-    triggerHaptic('light');
-    if (val === 'C') {
-      setAmountStr('');
-      return;
-    }
-    if (val === 'DEL') {
-      setAmountStr(prev => (prev.length > 1 ? prev.slice(0, -1) : ''));
-      return;
-    }
-    if (val === '000') {
-      if (amountStr && amountStr !== '0' && amountStr.length <= 8) {
-        setAmountStr(prev => prev + '000');
-      }
-      return;
-    }
-    if (amountStr.length >= 10) return;
-    setAmountStr(prev => (!prev || prev === '0' ? val : prev + val));
-  };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -136,6 +185,17 @@ export const QuickEntryModal: React.FC<QuickEntryModalProps> = ({
       setIsCompressing(true);
       const compressedBase64 = await compressReceiptImage(file);
       setReceiptImage(compressedBase64);
+
+      // OCR scan cerdas client-side
+      setIsScanningOCR(true);
+      const scanResult = await scanReceiptClientSide(compressedBase64);
+      if (scanResult.totalAmount && scanResult.totalAmount > 0) {
+        setAmountStr(scanResult.totalAmount.toString());
+        soundEngine.playCashRegister();
+      }
+      if (scanResult.merchantName && !note) {
+        setNote(scanResult.merchantName);
+      }
     } catch (err) {
       console.error('Gagal memproses gambar:', err);
       setActionModal({
@@ -148,13 +208,21 @@ export const QuickEntryModal: React.FC<QuickEntryModalProps> = ({
       });
     } finally {
       setIsCompressing(false);
+      setIsScanningOCR(false);
     }
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    const numericAmount = parseInt(amountStr, 10);
+    let numericAmount = parseInt(amountStr, 10);
+    if (amountStr.includes('+') || amountStr.includes('-')) {
+      const tokens = amountStr.replace(/[^0-9+-]/g, '').match(/([+-]?\d+)/g);
+      if (tokens) {
+        numericAmount = Math.max(0, tokens.reduce((acc, t) => acc + parseInt(t, 10), 0));
+      }
+    }
     if (!numericAmount || numericAmount <= 0) {
+      soundEngine.playError();
       setActionModal({
         isOpen: true,
         type: 'warning',
@@ -264,7 +332,8 @@ export const QuickEntryModal: React.FC<QuickEntryModalProps> = ({
         }
       }
 
-      // Animasi feedback positif
+      // Efek suara & haptik transaksi sukses
+      soundEngine.playCashRegister();
       triggerHaptic('success');
       if (type === 'income' || mood === 'worth') {
         confetti({
@@ -301,10 +370,26 @@ export const QuickEntryModal: React.FC<QuickEntryModalProps> = ({
     }
   };
 
-  const numericDisplay = parseInt(amountStr, 10);
-  const formattedDisplay = !isNaN(numericDisplay) && numericDisplay > 0
+  const isMathExpr = amountStr.includes('+') || amountStr.includes('-');
+  let evalResult = 0;
+  if (isMathExpr) {
+    const tokens = amountStr.replace(/[^0-9+-]/g, '').match(/([+-]?\d+)/g);
+    if (tokens) {
+      evalResult = Math.max(0, tokens.reduce((acc, t) => acc + parseInt(t, 10), 0));
+    }
+  }
+
+  const numericDisplay = isMathExpr ? evalResult : parseInt(amountStr, 10);
+  const formattedDisplay = isMathExpr
+    ? amountStr
+    : !isNaN(numericDisplay) && numericDisplay > 0
     ? new Intl.NumberFormat('id-ID').format(numericDisplay)
     : '0';
+
+  // Kalkulasi Harga Setara Jam Kerja (Nomor 6)
+  const equivalentHours = (type === 'expense' && hourlyWage > 0 && numericDisplay > 0)
+    ? (numericDisplay / hourlyWage).toFixed(1)
+    : null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-xs p-0 sm:p-4">
@@ -360,11 +445,22 @@ export const QuickEntryModal: React.FC<QuickEntryModalProps> = ({
 
         {/* Display Nominal Besar */}
         <div className="p-3 bg-[#F9F9FB] border-2 border-[#121214] rounded-xl text-center mb-3 relative select-none">
-          <span className="text-xs font-bold text-neutral-500 uppercase block mb-1">Nominal (Rp)</span>
+          <span className="text-xs font-bold text-neutral-500 uppercase block mb-1">
+            Nominal (Rp) {isMathExpr && `≈ Rp ${new Intl.NumberFormat('id-ID').format(evalResult)}`}
+          </span>
           <div className="text-3xl font-black tracking-tight text-[#121214] flex items-center justify-center">
             <span className="text-lg mr-1 text-neutral-400">Rp</span>
             <span>{formattedDisplay}</span>
           </div>
+
+          {/* Indikator Harga Setara Jam Kerja (Nomor 6) */}
+          {equivalentHours && Number(equivalentHours) > 0 && (
+            <div className="mt-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#FED7AA] border border-[#121214] text-[10px] font-black text-[#121214]">
+              <Clock className="w-3 h-3 text-orange-800" />
+              <span>Setara ~{equivalentHours} jam kerja kamu!</span>
+            </div>
+          )}
+
           {amountStr ? (
             <button
               type="button"
@@ -381,28 +477,28 @@ export const QuickEntryModal: React.FC<QuickEntryModalProps> = ({
           ) : null}
         </div>
 
-        {/* Numpad Cepat */}
+        {/* Numpad Cepat dengan Tombol Kalkulator Tambah & Kurang */}
         <div className="grid grid-cols-4 gap-1.5 mb-4">
-          {['1', '2', '3', '4', '5', '6', '7', '8', '9', 'C', '0', '000'].map(keyVal => (
+          {['1', '2', '3', '+', '4', '5', '6', '-', '7', '8', '9', '=', 'C', '0', '000', 'DEL'].map(keyVal => (
             <button
               key={keyVal}
               type="button"
               onClick={() => handleNumpadClick(keyVal)}
               className={`py-2.5 font-black text-base border-2 border-[#121214] rounded-lg shadow-[2px_2px_0px_#121214] active:translate-x-0.5 active:translate-y-0.5 cursor-pointer ${
-                keyVal === 'C' ? 'bg-[#FB7185] text-white hover:bg-rose-600 col-span-1' : 'bg-[#FFFFFF] hover:bg-neutral-50'
+                keyVal === 'C'
+                  ? 'bg-[#FB7185] text-white hover:bg-rose-600'
+                  : keyVal === '+' || keyVal === '-'
+                  ? 'bg-[#DDD6FE] text-[#121214] hover:bg-purple-200'
+                  : keyVal === '='
+                  ? 'bg-[#A3E635] text-[#121214] hover:bg-[#86efac]'
+                  : keyVal === 'DEL'
+                  ? 'bg-[#FEF08A] text-[#121214] hover:bg-amber-200 flex items-center justify-center'
+                  : 'bg-[#FFFFFF] hover:bg-neutral-50'
               }`}
             >
-              {keyVal}
+              {keyVal === 'DEL' ? <Delete className="w-4 h-4" /> : keyVal}
             </button>
           ))}
-          <button
-            type="button"
-            onClick={() => handleNumpadClick('DEL')}
-            className="col-span-4 py-2 font-black text-xs uppercase bg-[#FEF08A] border-2 border-[#121214] rounded-lg shadow-[2px_2px_0px_#121214] flex items-center justify-center gap-1.5 active:translate-x-0.5 active:translate-y-0.5 hover:bg-amber-200 cursor-pointer"
-          >
-            <Delete className="w-4 h-4" />
-            Hapus Angka (Backspace)
-          </button>
         </div>
 
         {/* Pemilihan Dompet */}
@@ -548,22 +644,45 @@ export const QuickEntryModal: React.FC<QuickEntryModalProps> = ({
 
         {/* Upload Foto Struk / Bukti Invoice */}
         <div className="p-3 bg-[#F9F9FB] border-2 border-[#121214] rounded-xl mb-3 space-y-2">
-          <span className="text-[10px] font-black uppercase text-neutral-600 block">
-            Foto Struk / Screenshot Bukti:
-          </span>
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-black uppercase text-neutral-600">
+              Foto Struk / Screenshot Bukti:
+            </span>
+            {isScanningOCR && (
+              <span className="text-[9px] font-black text-purple-700 animate-pulse flex items-center gap-1">
+                <Sparkles className="w-3 h-3" /> Membaca Total Struk...
+              </span>
+            )}
+          </div>
           {!receiptImage ? (
-            <label className="brutal-btn w-full py-2 bg-white text-xs uppercase gap-1.5 cursor-pointer">
-              <Camera className="w-4 h-4 text-neutral-700" />
-              <span>{isCompressing ? 'Memproses Foto...' : 'Foto / Unggah Struk'}</span>
-              <input
-                type="file"
-                accept="image/*"
-                capture="environment"
-                onChange={handleFileChange}
-                disabled={isCompressing}
-                className="hidden"
-              />
-            </label>
+            <div className="grid grid-cols-2 gap-2">
+              {/* Opsi 1: Buka Galeri File */}
+              <label className="brutal-btn py-2 bg-white text-xs uppercase gap-1.5 cursor-pointer flex items-center justify-center">
+                <ImageIcon className="w-4 h-4 text-neutral-700 shrink-0" />
+                <span className="truncate">{isCompressing ? 'Memproses...' : 'Buka Galeri'}</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileChange}
+                  disabled={isCompressing}
+                  className="hidden"
+                />
+              </label>
+
+              {/* Opsi 2: Ambil Foto Kamera Langsung */}
+              <label className="brutal-btn py-2 bg-[#FDE047] text-[#121214] text-xs uppercase gap-1.5 cursor-pointer flex items-center justify-center">
+                <Camera className="w-4 h-4 text-[#121214] shrink-0" />
+                <span className="truncate">{isCompressing ? 'Memproses...' : 'Buka Kamera'}</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={handleFileChange}
+                  disabled={isCompressing}
+                  className="hidden"
+                />
+              </label>
+            </div>
           ) : (
             <div className="flex items-center justify-between p-2 bg-white border border-[#121214] rounded-lg">
               <div className="flex items-center gap-2">

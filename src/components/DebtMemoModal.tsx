@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import type { DebtMemo, Wallet } from '../types';
 import { db } from '../db';
 import { formatRupiah } from '../constants/categories';
-import { X, Plus, Trash2, CheckCircle2, Clock, BookOpen, MessageCircle, ArrowDownLeft, ArrowUpRight } from 'lucide-react';
+import { X, Plus, Trash2, CheckCircle2, Clock, BookOpen, MessageCircle, ArrowDownLeft, ArrowUpRight, Calendar } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { ActionModal, type AlertModalState } from './ActionModal';
 
@@ -26,6 +26,7 @@ export const DebtMemoModal: React.FC<DebtMemoModalProps> = ({
   const [type, setType] = useState<'lent' | 'borrowed'>('lent');
   const [amountStr, setAmountStr] = useState('');
   const [description, setDescription] = useState('');
+  const [dueDate, setDueDate] = useState('');
 
   // State Dialog Konfirmasi Pelunasan Dompet
   const [settleTargetDebt, setSettleTargetDebt] = useState<DebtMemo | null>(null);
@@ -68,6 +69,7 @@ export const DebtMemoModal: React.FC<DebtMemoModalProps> = ({
       type,
       amount: cleanAmount,
       description: description.trim(),
+      dueDate: dueDate ? dueDate : undefined,
       isSettled: false,
       createdAt: Date.now()
     });
@@ -75,6 +77,7 @@ export const DebtMemoModal: React.FC<DebtMemoModalProps> = ({
     setPersonName('');
     setAmountStr('');
     setDescription('');
+    setDueDate('');
     setIsAdding(false);
     onRefresh();
   };
@@ -165,7 +168,8 @@ export const DebtMemoModal: React.FC<DebtMemoModalProps> = ({
   };
 
   const handleRemindWhatsApp = (debt: DebtMemo) => {
-    const text = `Halo ${debt.personName}! Mau ngingetin perihal talangan kemarin (${debt.description || 'nongkrong'}) sebesar ${formatRupiah(debt.amount)} yaa. Kalau sempat boleh ditransfer yaa bro/sis, makasih banyak! 🙏`;
+    const dueDateNotice = debt.dueDate ? ` sebelum tenggat ${new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(debt.dueDate))}` : '';
+    const text = `Halo ${debt.personName}! Mau ngingetin perihal talangan kemarin (${debt.description || 'nongkrong'}) sebesar ${formatRupiah(debt.amount)} yaa${dueDateNotice}. Kalau sempat boleh ditransfer yaa bro/sis, makasih banyak! 🙏`;
     const encoded = encodeURIComponent(text);
     window.open(`https://api.whatsapp.com/send?text=${encoded}`, '_blank');
   };
@@ -266,6 +270,20 @@ export const DebtMemoModal: React.FC<DebtMemoModalProps> = ({
                     {d.description && (
                       <p className="text-[10px] text-neutral-600 mt-0.5">{d.description}</p>
                     )}
+                    {d.dueDate && (
+                      <div className="flex items-center gap-1 mt-1 text-[10px] font-bold">
+                        <Calendar className="w-3 h-3 text-neutral-400 shrink-0" />
+                        <span className="text-neutral-500">Tenggat:</span>
+                        <span className={`px-1.5 py-0.2 rounded border text-[9px] font-black ${
+                          !d.isSettled && new Date(d.dueDate).getTime() < new Date().setHours(0, 0, 0, 0)
+                            ? 'bg-[#FB7185] text-[#121214] border-[#121214]'
+                            : 'bg-neutral-100 text-neutral-700 border-neutral-300'
+                        }`}>
+                          {new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(d.dueDate))}
+                          {!d.isSettled && new Date(d.dueDate).getTime() < new Date().setHours(0, 0, 0, 0) && ' (Lewat Tenggat!)'}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -343,6 +361,18 @@ export const DebtMemoModal: React.FC<DebtMemoModalProps> = ({
               onChange={e => setDescription(e.target.value)}
               className="brutal-input w-full text-xs"
             />
+
+            <div>
+              <label className="text-[10px] font-black uppercase text-neutral-600 block mb-1">
+                Tenggat Bayar (Opsional):
+              </label>
+              <input
+                type="date"
+                value={dueDate}
+                onChange={e => setDueDate(e.target.value)}
+                className="brutal-input w-full text-xs font-bold"
+              />
+            </div>
 
             <div className="flex gap-2 justify-end pt-1">
               <button

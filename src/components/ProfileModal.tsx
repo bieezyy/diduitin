@@ -18,6 +18,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   const [userRole, setUserRole] = useState<string>('');
   const [userBio, setUserBio] = useState<string>('');
   const [customDescription, setCustomDescription] = useState<string>('');
+  const [hourlyWage, setHourlyWage] = useState<string>('');
   const [isEditing, setIsEditing] = useState<boolean>(false);
   const [isProcessingImg, setIsProcessingImg] = useState<boolean>(false);
 
@@ -28,12 +29,14 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
       const savedRole = localStorage.getItem('diduitin_profile_role');
       const savedBio = localStorage.getItem('diduitin_profile_bio');
       const savedDesc = localStorage.getItem('diduitin_profile_desc');
+      const savedWage = localStorage.getItem('diduitin_hourly_wage');
 
       if (savedAvatar) setAvatarImg(savedAvatar);
       if (savedName) setUserName(savedName);
       if (savedRole) setUserRole(savedRole);
       if (savedBio) setUserBio(savedBio);
       if (savedDesc) setCustomDescription(savedDesc);
+      if (savedWage) setHourlyWage(savedWage);
     }
   }, [isOpen]);
 
@@ -70,6 +73,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
     localStorage.setItem('diduitin_profile_role', userRole);
     localStorage.setItem('diduitin_profile_bio', userBio);
     localStorage.setItem('diduitin_profile_desc', customDescription);
+    localStorage.setItem('diduitin_hourly_wage', hourlyWage.replace(/\D/g, ''));
     setIsEditing(false);
   };
 
@@ -184,6 +188,35 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
           ) : (
             <p className="text-xs font-bold text-neutral-800 leading-snug bg-white/70 p-2 rounded-lg border border-[#121214]">
               {userBio || 'Belum ada bio. Klik Edit untuk mengisi bio profil.'}
+            </p>
+          )}
+        </div>
+
+        {/* Estimasi Upah / Jam Kerja (Nomor 6) */}
+        <div className="p-3 bg-[#FEF08A] border-2 border-[#121214] rounded-xl space-y-1.5 text-xs shadow-[2px_2px_0px_#121214]">
+          <div className="flex items-center justify-between font-black">
+            <span className="text-[#121214] uppercase text-[10px]">Estimasi Upah Per Jam Kerja:</span>
+            <span className="text-[9px] bg-white px-1.5 py-0.5 rounded border border-[#121214]">Fitur Anti-FOMO</span>
+          </div>
+          {isEditing ? (
+            <div>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={hourlyWage ? new Intl.NumberFormat('id-ID').format(parseInt(hourlyWage.replace(/\D/g, ''), 10) || 0) : ''}
+                onChange={e => setHourlyWage(e.target.value.replace(/\D/g, ''))}
+                placeholder="Misal: 35.000 (Rp/jam)"
+                className="brutal-input w-full text-xs font-black bg-white"
+              />
+              <span className="text-[9px] font-bold text-neutral-700 block mt-1">
+                Digunakan untuk menghitung berapa jam kerja keras Anda yang terpakai saat jajan impulsif.
+              </span>
+            </div>
+          ) : (
+            <p className="font-black text-sm text-[#121214]">
+              {hourlyWage && parseInt(hourlyWage, 10) > 0
+                ? `Rp ${new Intl.NumberFormat('id-ID').format(parseInt(hourlyWage, 10))} / jam`
+                : 'Belum diatur (Klik Edit untuk mengisi)'}
             </p>
           )}
         </div>

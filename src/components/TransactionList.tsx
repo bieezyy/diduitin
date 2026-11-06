@@ -34,7 +34,9 @@ export const TransactionList: React.FC<TransactionListProps> = ({
 }) => {
   const [filterType, setFilterType] = useState<'all' | 'expense' | 'income' | 'transfer'>('all');
   const [filterNature, setFilterNature] = useState<'all' | 'need' | 'want'>('all');
+  const [filterMood, setFilterMood] = useState<'all' | 'worth' | 'neutral' | 'regret'>('all');
   const [dateRangeFilter, setDateRangeFilter] = useState<'all' | '7days' | '30days' | 'thisMonth'>('all');
+  const [minAmountFilter, setMinAmountFilter] = useState<number>(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedMonth, setSelectedMonth] = useState<string>('all');
   const [previewImage, setPreviewImage] = useState<string | null>(null);
@@ -68,6 +70,8 @@ export const TransactionList: React.FC<TransactionListProps> = ({
 
     if (filterType !== 'all' && tx.type !== filterType) return false;
     if (filterNature !== 'all' && tx.nature !== filterNature) return false;
+    if (filterMood !== 'all' && tx.mood !== filterMood) return false;
+    if (minAmountFilter > 0 && tx.amount < minAmountFilter) return false;
     if (selectedMonth !== 'all' && !tx.date.startsWith(selectedMonth)) return false;
 
     // Filter Periode Cepat
@@ -293,7 +297,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({
         )}
       </div>
 
-      {/* Filter Dropdown (Jenis, Waktu, Karakter) */}
+      {/* Filter Dropdown (Jenis, Waktu, Karakter, Mood, Nominal) */}
       <div className="flex flex-wrap items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
         {/* Dropdown Jenis */}
         <div className="flex items-center">
@@ -303,8 +307,9 @@ export const TransactionList: React.FC<TransactionListProps> = ({
               setFilterType(e.target.value as any);
               setCurrentPage(1);
             }}
-            className="brutal-input py-1 px-2 text-[11px] font-black bg-[#FACC15] text-[#121214] cursor-pointer uppercase"
+            className="brutal-input py-1 px-2 text-[10px] font-black bg-[#FACC15] text-[#121214] cursor-pointer uppercase"
           >
+            <option value="all">Semua Tipe</option>
             <option value="expense">Keluar</option>
             <option value="income">Masuk</option>
             <option value="transfer">Pindah</option>
@@ -319,10 +324,12 @@ export const TransactionList: React.FC<TransactionListProps> = ({
               setDateRangeFilter(e.target.value as any);
               setCurrentPage(1);
             }}
-            className="brutal-input py-1 px-2 text-[11px] font-black bg-[#38BDF8] text-[#121214] cursor-pointer uppercase"
+            className="brutal-input py-1 px-2 text-[10px] font-black bg-[#38BDF8] text-[#121214] cursor-pointer uppercase"
           >
+            <option value="all">Semua Hari</option>
             <option value="7days">7 Hari Terakhir</option>
             <option value="30days">30 Hari Terakhir</option>
+            <option value="thisMonth">Bulan Ini</option>
           </select>
         </div>
 
@@ -334,12 +341,46 @@ export const TransactionList: React.FC<TransactionListProps> = ({
               setFilterNature(e.target.value as any);
               setCurrentPage(1);
             }}
-            className="brutal-input py-1 px-2 text-[11px] font-black bg-[#DDD6FE] text-[#121214] cursor-pointer uppercase"
+            className="brutal-input py-1 px-2 text-[10px] font-black bg-[#DDD6FE] text-[#121214] cursor-pointer uppercase"
           >
-            <option value="need">#Need (Kebutuhan)</option>
-            <option value="want">#FOMO (Keinginan)</option>
+            <option value="all">Semua Sifat</option>
+            <option value="need">#Need</option>
+            <option value="want">#FOMO</option>
           </select>
         </div>
+
+        {/* Dropdown Mood / Evaluasi Belanja */}
+        <div className="flex items-center">
+          <select
+            value={filterMood}
+            onChange={e => {
+              setFilterMood(e.target.value as any);
+              setCurrentPage(1);
+            }}
+            className="brutal-input py-1 px-2 text-[10px] font-black bg-[#FED7AA] text-[#121214] cursor-pointer uppercase"
+          >
+            <option value="all">Semua Mood</option>
+            <option value="worth">Worth it 🤩</option>
+            <option value="neutral">B Aja 😐</option>
+            <option value="regret">Nyesel 😭</option>
+          </select>
+        </div>
+
+        {/* Filter Nominal > 100k */}
+        <button
+          type="button"
+          onClick={() => {
+            setMinAmountFilter(prev => (prev === 100000 ? 0 : 100000));
+            setCurrentPage(1);
+          }}
+          className={`px-2 py-1 rounded text-[10px] font-black uppercase border border-[#121214] cursor-pointer transition-all ${
+            minAmountFilter === 100000
+              ? 'bg-[#FB7185] text-white shadow-[1px_1px_0px_#121214]'
+              : 'bg-white text-neutral-700 hover:bg-neutral-100'
+          }`}
+        >
+          {minAmountFilter === 100000 ? '≥ 100 Rb ✓' : '≥ 100 Rb'}
+        </button>
       </div>
 
       {/* List Feed */}

@@ -43,6 +43,7 @@ export interface WishlistTarget {
   itemUrl?: string; // Link barang/keinginan (misal: Tokopedia, Shopee, website)
   categoryIcon?: string;
   isCompleted?: boolean;
+  cooldownUntil?: number; // Timestamp waktu penahanan diri (Cooldown timer anti-FOMO)
   createdAt: number;
 }
 
